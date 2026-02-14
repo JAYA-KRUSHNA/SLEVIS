@@ -1022,6 +1022,8 @@ function ViolationPredictor() {
         overallRisk: string;
         recommendation: string;
         hotspotAnalysis: string;
+        modelUsed?: string;
+        confidence?: number;
     } | null>(null);
 
     const handlePredict = async () => {
@@ -1236,6 +1238,36 @@ function ViolationPredictor() {
                                 </div>
                             </div>
                         </div>
+
+                        {/* Model Source Badge */}
+                        {result.modelUsed && (
+                            <motion.div
+                                initial={{ opacity: 0, y: 10 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                transition={{ delay: 0.2 }}
+                                className="flex items-center justify-center gap-3 mb-8"
+                            >
+                                <div className={`inline-flex items-center gap-2 px-4 py-2 rounded-full border text-sm font-medium ${result.modelUsed.includes('DL') || result.modelUsed.includes('Ensemble')
+                                        ? 'bg-purple-500/15 border-purple-500/40 text-purple-400'
+                                        : result.modelUsed.includes('Gemini')
+                                            ? 'bg-blue-500/15 border-blue-500/40 text-blue-400'
+                                            : 'bg-gray-500/15 border-gray-500/40 text-gray-400'
+                                    }`}>
+                                    <span className="relative flex h-2 w-2">
+                                        <span className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${result.modelUsed.includes('DL') || result.modelUsed.includes('Ensemble') ? 'bg-purple-400' :
+                                                result.modelUsed.includes('Gemini') ? 'bg-blue-400' : 'bg-gray-400'
+                                            }`}></span>
+                                        <span className={`relative inline-flex rounded-full h-2 w-2 ${result.modelUsed.includes('DL') || result.modelUsed.includes('Ensemble') ? 'bg-purple-500' :
+                                                result.modelUsed.includes('Gemini') ? 'bg-blue-500' : 'bg-gray-500'
+                                            }`}></span>
+                                    </span>
+                                    <span>Powered by {result.modelUsed}</span>
+                                    {result.confidence !== undefined && (
+                                        <span className="opacity-70">• {Math.round(result.confidence * 100)}% confidence</span>
+                                    )}
+                                </div>
+                            </motion.div>
+                        )}
 
                         {/* Predictions Grid */}
                         <div className="p-8 rounded-3xl bg-gray-900/50 backdrop-blur-xl border border-gray-800/50 mb-8">

@@ -1,6 +1,6 @@
 """
-SLEVIS Deep Learning API Server v3.0
-FastAPI server with Ensemble (ResidualDNN + AttentionLSTM)
+SLEVIS Deep Learning API Server v4.0
+FastAPI server with 3-Model Ensemble (ResidualDNN + AttentionLSTM + Conv1DCNN)
 
 Run: python server.py
 Docs: http://localhost:8000/docs
@@ -14,14 +14,14 @@ from pydantic import BaseModel
 from typing import List, Optional
 
 from model import (
-    ResidualDNN, AttentionLSTM, EnsemblePredictor,
+    ResidualDNN, AttentionLSTM, Conv1DViolationPredictor, EnsemblePredictor,
     train_deep_model, VIOLATION_TYPES
 )
 
 app = FastAPI(
     title="SLEVIS Deep Learning API",
-    description="Ensemble (ResidualDNN + AttentionLSTM) for traffic violation prediction",
-    version="3.0.0"
+    description="3-Model Ensemble (ResidualDNN + AttentionLSTM + Conv1DCNN) for traffic violation prediction",
+    version="4.0.0"
 )
 
 app.add_middleware(
@@ -36,30 +36,51 @@ app.add_middleware(
 ensemble_model: EnsemblePredictor = None
 deep_model: ResidualDNN = None
 lstm_model: AttentionLSTM = None
+cnn_model: Conv1DViolationPredictor = None
 
 DEEP_MODEL_PATH = "deep_model.keras"
 LSTM_MODEL_PATH = "lstm_model.keras"
+CNN_MODEL_PATH = "cnn_model.keras"
 SCALER_PATH = "scaler.pkl"
 WEIGHTS_PATH = "ensemble_weights.json"
 METRICS_PATH = "training_metrics.json"
 
 
 def get_ensemble_model():
-    global ensemble_model, deep_model, lstm_model
+    global ensemble_model, deep_model, lstm_model, cnn_model
     if ensemble_model is None:
-        if os.path.exists(DEEP_MODEL_PATH) and os.path.exists(LSTM_MODEL_PATH):
+        has_dnn = os.path.exists(DEEP_MODEL_PATH)
+        has_lstm = os.path.exists(LSTM_MODEL_PATH)
+        has_cnn = os.path.exists(CNN_MODEL_PATH)
+        scaler = SCALER_PATH if os.path.exists(SCALER_PATH) else None
+        weights = WEIGHTS_PATH if os.path.exists(WEIGHTS_PATH) else None
+
+        if has_dnn and has_lstm and has_cnn:
+            # Full 3-model ensemble
             ensemble_model = EnsemblePredictor(
                 dnn_path=DEEP_MODEL_PATH,
                 lstm_path=LSTM_MODEL_PATH,
-                scaler_path=SCALER_PATH if os.path.exists(SCALER_PATH) else None,
-                weights_path=WEIGHTS_PATH if os.path.exists(WEIGHTS_PATH) else None,
+                cnn_path=CNN_MODEL_PATH,
+                scaler_path=scaler,
+                weights_path=weights,
             )
             deep_model = ensemble_model.dnn
             lstm_model = ensemble_model.lstm
-        elif os.path.exists(DEEP_MODEL_PATH):
+            cnn_model = ensemble_model.cnn
+        elif has_dnn and has_lstm:
+            # 2-model ensemble (backward compatible)
+            ensemble_model = EnsemblePredictor(
+                dnn_path=DEEP_MODEL_PATH,
+                lstm_path=LSTM_MODEL_PATH,
+                scaler_path=scaler,
+                weights_path=weights,
+            )
+            deep_model = ensemble_model.dnn
+            lstm_model = ensemble_model.lstm
+        elif has_dnn:
             deep_model = ResidualDNN(
                 model_path=DEEP_MODEL_PATH,
-                scaler_path=SCALER_PATH if os.path.exists(SCALER_PATH) else None
+                scaler_path=scaler
             )
         else:
             print("🏋️ No trained models found. Training ResidualDNN...")
@@ -81,13 +102,20 @@ def get_lstm_model():
     return lstm_model
 
 
+def get_cnn_model():
+    global cnn_model
+    if cnn_model is None:
+        get_ensemble_model()
+    return cnn_model
+
+
 # Request/Response models
 class PredictionRequest(BaseModel):
     vehicleType: str = "two_wheeler"
     location: str = ""
     timeOfDay: str = "12:00"
     dayOfWeek: str = "monday"
-    model: str = "ensemble"  # "ensemble", "deep", or "lstm"
+    model: str = "ensemble"  # "ensemble", "deep", "lstm", or "cnn"
 
 
 class ViolationPrediction(BaseModel):
@@ -102,6 +130,7 @@ class PredictionResponse(BaseModel):
     recommendation: str
     hotspotAnalysis: str
     modelUsed: str
+    confidence: Optional[float] = None
 
 
 class ClassifyRequest(BaseModel):
@@ -119,11 +148,12 @@ class ClassifyResponse(BaseModel):
 @app.get("/")
 async def root():
     return {
-        "service": "SLEVIS Deep Learning API v3.0",
+        "service": "SLEVIS Deep Learning API v4.0",
         "models": {
-            "ensemble": "Weighted Ensemble (ResidualDNN + AttentionLSTM) — Best accuracy",
-            "deep": "ResidualDNN — 9-Layer with Skip Connections (512→Res256→Res128→Res64→32)",
-            "lstm": "AttentionLSTM — Bidirectional LSTM with Multi-Head Self-Attention"
+            "ensemble": "3-Model Weighted Ensemble (DNN + LSTM + CNN) — Best accuracy",
+            "deep": "ResidualDNN — 9-Layer with Skip Connections",
+            "lstm": "AttentionLSTM — Bidirectional LSTM with Multi-Head Self-Attention",
+            "cnn": "Conv1DCNN — 1D Convolutional Neural Network"
         },
         "endpoints": ["/predict", "/classify", "/health", "/models", "/metrics"]
     }
@@ -135,6 +165,7 @@ async def health():
         "ensemble": ensemble_model is not None,
         "deep": deep_model is not None,
         "lstm": lstm_model is not None,
+        "cnn": cnn_model is not None,
     }
     return {"status": "healthy", "violations": VIOLATION_TYPES, "models_loaded": models_loaded}
 
@@ -145,9 +176,9 @@ async def list_models():
         "available": [
             {
                 "id": "ensemble",
-                "name": "Ensemble (ResidualDNN + AttentionLSTM)",
-                "architecture": "Weighted average of DNN and LSTM predictions",
-                "params": "~350K total",
+                "name": "Ensemble (DNN + LSTM + CNN)",
+                "architecture": "Weighted average of 3 model predictions",
+                "params": "~400K total",
                 "recommended": True,
             },
             {
@@ -163,6 +194,13 @@ async def list_models():
                 "architecture": "20 → Reshape(5,4) → BiLSTM(64) → SelfAttn(4h) → LSTM(32) → Dense → 9",
                 "params": "~100K",
                 "features": "Multi-head self-attention, bidirectional, temporal patterns",
+            },
+            {
+                "id": "cnn",
+                "name": "Conv1DCNN",
+                "architecture": "20 → Reshape(20,1) → Conv64 → Conv128 → Conv64 → GlobalMaxPool → Dense → 9",
+                "params": "~50K",
+                "features": "1D convolution over feature vector, local pattern detection",
             }
         ]
     }
@@ -183,9 +221,10 @@ async def predict(request: PredictionRequest):
     🔮 Traffic Violation Prediction
 
     Models:
-    - model="ensemble": Weighted DNN+LSTM (default, best accuracy)
+    - model="ensemble": Weighted DNN+LSTM+CNN (default, best accuracy)
     - model="deep": ResidualDNN (fast, stable)
     - model="lstm": AttentionLSTM (temporal patterns)
+    - model="cnn": Conv1DCNN (local feature patterns)
     """
     try:
         if request.model == "lstm" and get_lstm_model():
@@ -194,9 +233,12 @@ async def predict(request: PredictionRequest):
         elif request.model == "deep" and get_deep_model():
             model = get_deep_model()
             model_name = "ResidualDNN"
+        elif request.model == "cnn" and get_cnn_model():
+            model = get_cnn_model()
+            model_name = "Conv1DCNN"
         elif get_ensemble_model() and isinstance(get_ensemble_model(), EnsemblePredictor):
             model = get_ensemble_model()
-            model_name = "Ensemble(DNN+LSTM)"
+            model_name = "Ensemble(DNN+LSTM+CNN)"
         else:
             model = get_deep_model()
             model_name = "ResidualDNN"
@@ -207,7 +249,16 @@ async def predict(request: PredictionRequest):
             request.timeOfDay,
             request.dayOfWeek
         )
-        result['modelUsed'] = model_name
+
+        # Add modelUsed if not already present (ensemble adds it)
+        if 'modelUsed' not in result:
+            result['modelUsed'] = model_name
+
+        # Add confidence if not present
+        if 'confidence' not in result:
+            top3 = sorted([p['probability'] for p in result['predictions']], reverse=True)[:3]
+            result['confidence'] = round(sum(top3) / len(top3), 4) if top3 else 0.0
+
         return PredictionResponse(**result)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -251,9 +302,9 @@ async def classify(request: ClassifyRequest):
 @app.on_event("startup")
 async def startup():
     print("\n" + "=" * 60)
-    print("🚀 SLEVIS DEEP LEARNING API v3.0")
+    print("🚀 SLEVIS DEEP LEARNING API v4.0")
     print("=" * 60)
-    print("📦 Loading models...")
+    print("📦 Loading models (DNN + LSTM + CNN)...")
     get_ensemble_model()
     print("=" * 60)
     print("✅ Ready at http://localhost:8000")
@@ -262,4 +313,5 @@ async def startup():
 
 if __name__ == "__main__":
     import uvicorn
+    print("🚀 SLEVIS DEEP LEARNING API v4.0")
     uvicorn.run(app, host="0.0.0.0", port=8000)

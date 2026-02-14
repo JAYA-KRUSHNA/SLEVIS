@@ -86,4 +86,6 @@ export interface PredictionResult {
     overallRisk: 'low' | 'medium' | 'high';
     recommendation: string;
     hotspotAnalysis: string;
+    modelUsed?: string;
+    confidence?: number;
 }

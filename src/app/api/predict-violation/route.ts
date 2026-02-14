@@ -1,12 +1,101 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { callGemini, PredictionResult, ViolationPrediction } from '@/lib/gemini';
 
+const DL_API_URL = process.env.DL_API_URL || 'http://localhost:8000';
+
 export async function POST(request: NextRequest) {
     try {
         const { vehicleType, location, timeOfDay, dayOfWeek } = await request.json();
 
-        // Build prediction prompt
-        const prompt = `You are an AI traffic violation prediction system for law enforcement. Based on historical patterns and traffic behavior analysis, predict likely violations.
+        // ─── Run BOTH DL and Gemini in parallel ───────────────
+        const [dlResult, geminiResult] = await Promise.allSettled([
+            fetchDLPrediction(vehicleType, location, timeOfDay, dayOfWeek),
+            fetchGeminiPrediction(vehicleType, location, timeOfDay, dayOfWeek),
+        ]);
+
+        const dlOk = dlResult.status === 'fulfilled' ? dlResult.value : null;
+        const geminiOk = geminiResult.status === 'fulfilled' ? geminiResult.value : null;
+
+        // ─── Best-of selection based on confidence ─────────────
+        let bestResult: PredictionResult;
+
+        if (dlOk && geminiOk) {
+            // Both succeeded — pick the one with higher confidence
+            const dlConfidence = getConfidence(dlOk);
+            const geminiConfidence = getConfidence(geminiOk);
+
+            if (dlConfidence >= geminiConfidence) {
+                bestResult = { ...dlOk, modelUsed: dlOk.modelUsed || 'DL Ensemble (DNN+LSTM+CNN)' };
+            } else {
+                bestResult = { ...geminiOk, modelUsed: 'Gemini AI' };
+            }
+        } else if (dlOk) {
+            bestResult = { ...dlOk, modelUsed: dlOk.modelUsed || 'DL Ensemble (DNN+LSTM+CNN)' };
+        } else if (geminiOk) {
+            bestResult = { ...geminiOk, modelUsed: 'Gemini AI' };
+        } else {
+            // Both failed — use rule-based fallback
+            bestResult = generateFallbackPrediction(vehicleType, location, timeOfDay, dayOfWeek);
+            bestResult.modelUsed = 'Rule-Based Fallback';
+        }
+
+        return NextResponse.json(bestResult);
+
+    } catch (error: any) {
+        console.error('Prediction error:', error);
+        const fallback = generateFallbackPrediction('unknown', 'unknown', '12:00', 'monday');
+        fallback.modelUsed = 'Rule-Based Fallback';
+        return NextResponse.json(fallback);
+    }
+}
+
+
+// ─── DL Backend (FastAPI) ─────────────────────────────────────
+async function fetchDLPrediction(
+    vehicleType: string, location: string, timeOfDay: string, dayOfWeek: string
+): Promise<PredictionResult> {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 5000); // 5s timeout
+
+    try {
+        const res = await fetch(`${DL_API_URL}/predict`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                vehicleType,
+                location,
+                timeOfDay,
+                dayOfWeek,
+                model: 'ensemble',
+            }),
+            signal: controller.signal,
+        });
+
+        clearTimeout(timeout);
+
+        if (!res.ok) throw new Error(`DL API returned ${res.status}`);
+        const data = await res.json();
+
+        return {
+            predictions: data.predictions,
+            overallRisk: data.overallRisk,
+            recommendation: data.recommendation,
+            hotspotAnalysis: data.hotspotAnalysis,
+            modelUsed: data.modelUsed || 'DL Ensemble (DNN+LSTM+CNN)',
+            confidence: data.confidence,
+        };
+    } catch (err) {
+        clearTimeout(timeout);
+        throw err;
+    }
+}
+
+
+// ─── Gemini AI ────────────────────────────────────────────────
+async function fetchGeminiPrediction(
+    vehicleType: string, location: string, timeOfDay: string, dayOfWeek: string
+): Promise<PredictionResult> {
+    const prompt = `You are an AI traffic violation prediction system for law enforcement. Based on historical patterns and traffic behavior analysis, predict likely violations.
 
 INPUT DATA:
 - Vehicle Type: ${vehicleType || 'unknown'}
@@ -46,36 +135,39 @@ Respond ONLY with a valid JSON object (no markdown):
 
 Provide 3-5 most likely violations.`;
 
-        let result: PredictionResult;
+    const response = await callGemini(prompt);
+    const cleanResponse = response.replace(/```json\n?|\n?```/g, '').trim();
+    const result: PredictionResult = JSON.parse(cleanResponse);
 
-        try {
-            const response = await callGemini(prompt);
-            const cleanResponse = response.replace(/```json\n?|\n?```/g, '').trim();
-            result = JSON.parse(cleanResponse);
+    // Validate predictions
+    result.predictions = result.predictions.map(p => ({
+        ...p,
+        probability: Math.min(1, Math.max(0, p.probability))
+    }));
 
-            // Validate predictions
-            result.predictions = result.predictions.map(p => ({
-                ...p,
-                probability: Math.min(1, Math.max(0, p.probability))
-            }));
+    // Calculate confidence for comparison
+    const topProbs = result.predictions
+        .map(p => p.probability)
+        .sort((a, b) => b - a)
+        .slice(0, 3);
+    result.confidence = topProbs.reduce((a, b) => a + b, 0) / topProbs.length;
 
-        } catch (err) {
-            // Use fallback prediction if API fails
-            result = generateFallbackPrediction(vehicleType, location, timeOfDay, dayOfWeek);
-        }
-
-        return NextResponse.json(result);
-
-    } catch (error: any) {
-        console.error('Prediction error:', error);
-
-        // Fallback prediction
-        const fallback = generateFallbackPrediction('unknown', 'unknown', '12:00', 'monday');
-        return NextResponse.json(fallback);
-    }
+    return result;
 }
 
-// Fallback rule-based prediction when API is unavailable
+
+// ─── Confidence Calculator ────────────────────────────────────
+function getConfidence(result: PredictionResult): number {
+    if (result.confidence !== undefined) return result.confidence;
+    const probs = result.predictions
+        .map(p => p.probability)
+        .sort((a, b) => b - a)
+        .slice(0, 3);
+    return probs.reduce((a, b) => a + b, 0) / (probs.length || 1);
+}
+
+
+// ─── Rule-based Fallback ──────────────────────────────────────
 function generateFallbackPrediction(
     vehicleType: string,
     location: string,
@@ -90,15 +182,12 @@ function generateFallbackPrediction(
 
     // Time-based predictions
     if (hour >= 17 && hour <= 21) {
-        // Evening rush
         predictions.push({ type: 'signal_jump', probability: 0.72, riskLevel: 'high' });
         predictions.push({ type: 'overspeeding', probability: 0.65, riskLevel: 'medium' });
     } else if (hour >= 22 || hour <= 5) {
-        // Late night
         predictions.push({ type: 'drunk_driving', probability: 0.68, riskLevel: 'high' });
         predictions.push({ type: 'overspeeding', probability: 0.75, riskLevel: 'high' });
     } else if (hour >= 8 && hour <= 10) {
-        // Morning rush
         predictions.push({ type: 'signal_jump', probability: 0.70, riskLevel: 'high' });
     }
 
@@ -130,16 +219,14 @@ function generateFallbackPrediction(
         }
     }
 
-    // Deduplicate and sort by probability
+    // Deduplicate and sort
     const uniquePredictions = Array.from(
         new Map(predictions.map(p => [p.type, p])).values()
     ).sort((a, b) => b.probability - a.probability).slice(0, 5);
 
-    // Calculate overall risk
     const avgProbability = uniquePredictions.reduce((sum, p) => sum + p.probability, 0) / uniquePredictions.length;
     const overallRisk: 'low' | 'medium' | 'high' = avgProbability > 0.65 ? 'high' : avgProbability > 0.45 ? 'medium' : 'low';
 
-    // Generate recommendation
     const topViolation = uniquePredictions[0]?.type || 'general violations';
     const recommendations: Record<string, string> = {
         no_helmet: 'Deploy helmet check drive at this location',
@@ -154,6 +241,7 @@ function generateFallbackPrediction(
         predictions: uniquePredictions,
         overallRisk,
         recommendation: recommendations[topViolation] || recommendations.default,
-        hotspotAnalysis: `Based on ${isTwoWheeler ? 'two-wheeler' : 'four-wheeler'} traffic patterns at ${timeOfDay} on ${dayOfWeek}${isWeekend ? ' (weekend)' : ''}, this location shows elevated risk for ${topViolation.replace('_', ' ')} violations.`
+        hotspotAnalysis: `Based on ${isTwoWheeler ? 'two-wheeler' : 'four-wheeler'} traffic patterns at ${timeOfDay} on ${dayOfWeek}${isWeekend ? ' (weekend)' : ''}, this location shows elevated risk for ${topViolation.replace('_', ' ')} violations.`,
+        modelUsed: 'Rule-Based Fallback',
     };
 }
