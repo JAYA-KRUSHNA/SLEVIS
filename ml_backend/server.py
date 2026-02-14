@@ -119,8 +119,8 @@ def get_yolo_model():
     if yolo_model is None:
         try:
             from ultralytics import YOLO
-            yolo_model = YOLO('yolov8n.pt')  # Auto-downloads ~6MB nano model
-            print("✅ YOLOv8n loaded for vehicle detection")
+            yolo_model = YOLO('yolov8s.pt')  # Small model (~22MB) — much better accuracy for bikes
+            print("✅ YOLOv8s loaded for vehicle detection")
         except Exception as e:
             print(f"⚠️ YOLO load failed: {e}")
     return yolo_model
@@ -134,49 +134,81 @@ VEHICLE_CLASSES = {
     1: ('2W', 'Bicycle'),
 }
 
-# Color name mapping from RGB ranges
-COLOR_MAP = [
-    ((0, 0, 0),       (60, 60, 60),       'Black'),
-    ((180, 180, 180),  (255, 255, 255),    'White'),
-    ((100, 100, 100),  (180, 180, 180),    'Silver/Grey'),
-    ((150, 0, 0),      (255, 80, 80),      'Red'),
-    ((0, 0, 130),      (80, 80, 255),      'Blue'),
-    ((0, 100, 0),      (80, 255, 80),      'Green'),
-    ((180, 180, 0),    (255, 255, 100),    'Yellow'),
-    ((180, 100, 0),    (255, 180, 80),     'Orange'),
-    ((80, 40, 0),      (160, 100, 60),     'Brown'),
-    ((100, 0, 100),    (200, 80, 200),     'Purple'),
-]
-
 
 def get_dominant_color(img, bbox):
-    """Extract the dominant color from a bounding box region of the image."""
+    """Extract the dominant color using HSV color space — much more accurate than RGB."""
     import numpy as np
+
     x1, y1, x2, y2 = [int(c) for c in bbox]
-    # Crop the vehicle region (with slight inset to avoid background)
-    margin_x = int((x2 - x1) * 0.15)
-    margin_y = int((y2 - y1) * 0.15)
-    crop = img.crop((x1 + margin_x, y1 + margin_y, x2 - margin_x, y2 - margin_y))
-    crop = crop.resize((30, 30))  # Small size for fast processing
+    w, h = x2 - x1, y2 - y1
+    if w < 5 or h < 5:
+        return 'Unknown'
 
-    pixels = np.array(crop).reshape(-1, 3)
-    avg_color = pixels.mean(axis=0)
-    r, g, b = avg_color
+    # Crop center region of vehicle (avoid edges/background)
+    mx, my = int(w * 0.2), int(h * 0.2)
+    crop = img.crop((x1 + mx, y1 + my, x2 - mx, y2 - my))
+    crop = crop.resize((40, 40))
 
-    # Match to nearest named color
-    best_color = 'Unknown'
-    best_dist = float('inf')
-    for (r1, g1, b1), (r2, g2, b2), name in COLOR_MAP:
-        if r1 <= r <= r2 and g1 <= g <= g2 and b1 <= b <= b2:
-            return name
-        # Fallback: find closest color center
-        center_r, center_g, center_b = (r1 + r2) / 2, (g1 + g2) / 2, (b1 + b2) / 2
-        dist = ((r - center_r) ** 2 + (g - center_g) ** 2 + (b - center_b) ** 2) ** 0.5
-        if dist < best_dist:
-            best_dist = dist
-            best_color = name
+    pixels = np.array(crop, dtype=np.float64).reshape(-1, 3)
 
-    return best_color
+    # Use K-means (k=3) to find dominant color clusters
+    from sklearn.cluster import MiniBatchKMeans
+    kmeans = MiniBatchKMeans(n_clusters=min(3, len(pixels)), n_init=1, random_state=0)
+    kmeans.fit(pixels)
+
+    # Pick the largest cluster's center as dominant color
+    counts = np.bincount(kmeans.labels_)
+    dominant_rgb = kmeans.cluster_centers_[counts.argmax()]
+    r, g, b = dominant_rgb
+
+    # Convert to HSV for reliable color naming
+    r_n, g_n, b_n = r / 255.0, g / 255.0, b / 255.0
+    cmax, cmin = max(r_n, g_n, b_n), min(r_n, g_n, b_n)
+    diff = cmax - cmin
+
+    # Value (brightness)
+    v = cmax
+    # Saturation
+    s = 0 if cmax == 0 else diff / cmax
+    # Hue
+    if diff == 0:
+        h_val = 0
+    elif cmax == r_n:
+        h_val = 60 * (((g_n - b_n) / diff) % 6)
+    elif cmax == g_n:
+        h_val = 60 * (((b_n - r_n) / diff) + 2)
+    else:
+        h_val = 60 * (((r_n - g_n) / diff) + 4)
+
+    # Classify by HSV
+    if v < 0.15:
+        return 'Black'
+    if v > 0.85 and s < 0.15:
+        return 'White'
+    if s < 0.15:
+        if v < 0.45:
+            return 'Dark Grey'
+        return 'Silver/Grey'
+
+    # Chromatic colors by hue
+    if h_val < 15 or h_val >= 345:
+        return 'Red'
+    elif h_val < 40:
+        return 'Orange'
+    elif h_val < 70:
+        return 'Yellow'
+    elif h_val < 160:
+        return 'Green'
+    elif h_val < 195:
+        return 'Cyan'
+    elif h_val < 260:
+        return 'Blue'
+    elif h_val < 290:
+        return 'Purple'
+    elif h_val < 345:
+        return 'Pink'
+
+    return 'Unknown'
 
 
 def get_vehicle_description(vtype, base_name, color, bbox_area, img_area):
