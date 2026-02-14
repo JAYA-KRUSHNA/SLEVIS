@@ -1,0 +1,5 @@
+{
+  "dnn_weight": 0.75,
+  "lstm_weight": 0.25,
+  "val_auc": 0.9611
+}

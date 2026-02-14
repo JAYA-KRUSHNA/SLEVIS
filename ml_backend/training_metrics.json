@@ -1,0 +1,146 @@
+{
+  "dataset": {
+    "n_samples": 50000,
+    "n_features": 20,
+    "n_labels": 9,
+    "train_size": 35020,
+    "val_size": 7480,
+    "test_size": 7500
+  },
+  "residual_dnn": {
+    "no_helmet": {
+      "precision": 0.9921,
+      "recall": 0.9821,
+      "f1": 0.9871,
+      "auc": 0.9992
+    },
+    "signal_jump": {
+      "precision": 0.8973,
+      "recall": 0.8907,
+      "f1": 0.894,
+      "auc": 0.9791
+    },
+    "overspeeding": {
+      "precision": 0.8569,
+      "recall": 0.8401,
+      "f1": 0.8484,
+      "auc": 0.9281
+    },
+    "wrong_side": {
+      "precision": 0.8688,
+      "recall": 0.8681,
+      "f1": 0.8684,
+      "auc": 0.9547
+    },
+    "triple_riding": {
+      "precision": 0.8644,
+      "recall": 0.5075,
+      "f1": 0.6395,
+      "auc": 0.9536
+    },
+    "no_seatbelt": {
+      "precision": 0.7273,
+      "recall": 0.0216,
+      "f1": 0.042,
+      "auc": 0.9205
+    },
+    "using_phone": {
+      "precision": 0.774,
+      "recall": 0.3874,
+      "f1": 0.5163,
+      "auc": 0.944
+    },
+    "drunk_driving": {
+      "precision": 0.8239,
+      "recall": 0.9259,
+      "f1": 0.8719,
+      "auc": 0.9822
+    },
+    "overloading": {
+      "precision": 0.8392,
+      "recall": 0.9548,
+      "f1": 0.8932,
+      "auc": 0.9909
+    },
+    "overall": {
+      "macro_precision": 0.8493,
+      "macro_recall": 0.7087,
+      "macro_f1": 0.729,
+      "macro_auc": 0.9614
+    }
+  },
+  "attention_lstm": {
+    "no_helmet": {
+      "precision": 0.9852,
+      "recall": 0.9783,
+      "f1": 0.9817,
+      "auc": 0.9983
+    },
+    "signal_jump": {
+      "precision": 0.8743,
+      "recall": 0.8731,
+      "f1": 0.8737,
+      "auc": 0.9681
+    },
+    "overspeeding": {
+      "precision": 0.816,
+      "recall": 0.8479,
+      "f1": 0.8317,
+      "auc": 0.9166
+    },
+    "wrong_side": {
+      "precision": 0.8087,
+      "recall": 0.742,
+      "f1": 0.7739,
+      "auc": 0.8823
+    },
+    "triple_riding": {
+      "precision": 0.894,
+      "recall": 0.4185,
+      "f1": 0.5702,
+      "auc": 0.9103
+    },
+    "no_seatbelt": {
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1": 0.0,
+      "auc": 0.865
+    },
+    "using_phone": {
+      "precision": 0.5949,
+      "recall": 0.2903,
+      "f1": 0.3902,
+      "auc": 0.8731
+    },
+    "drunk_driving": {
+      "precision": 0.8484,
+      "recall": 0.7907,
+      "f1": 0.8185,
+      "auc": 0.9795
+    },
+    "overloading": {
+      "precision": 0.8502,
+      "recall": 0.9248,
+      "f1": 0.8859,
+      "auc": 0.9866
+    },
+    "overall": {
+      "macro_precision": 0.7413,
+      "macro_recall": 0.6518,
+      "macro_f1": 0.6806,
+      "macro_auc": 0.9311
+    }
+  },
+  "ensemble": {
+    "dnn_weight": 0.75,
+    "lstm_weight": 0.25,
+    "overall": {
+      "macro_auc": 0.9594,
+      "macro_f1": 0.7146,
+      "macro_precision": 0.7753,
+      "macro_recall": 0.6924
+    }
+  },
+  "best_model": "ResidualDNN",
+  "training_time_seconds": 1366.0
+}
