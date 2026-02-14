@@ -3,7 +3,9 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
+    "dev": "concurrently --names \"NEXT,ML\" --prefix-colors \"cyan,magenta\" \"next dev\" \"cd ml_backend && source venv/bin/activate && python server.py\"",
+    "dev:next": "next dev",
+    "dev:ml": "cd ml_backend && source venv/bin/activate && python server.py",
     "build": "next build",
     "start": "next start",
     "lint": "eslint"
@@ -31,6 +33,7 @@
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "@types/three": "^0.182.0",
+    "concurrently": "^9.2.1",
     "eslint": "^9",
     "eslint-config-next": "16.1.6",
     "tailwindcss": "^4",

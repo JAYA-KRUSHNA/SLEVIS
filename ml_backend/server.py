@@ -131,6 +131,7 @@ VEHICLE_CLASSES = {
     3: ('2W', 'Motorcycle'),
     5: ('BUS', 'Bus'),
     7: ('CV', 'Truck'),
+    1: ('2W', 'Bicycle'),
 }
 
 
@@ -156,8 +157,8 @@ async def analyze_image(req: ImageAnalysisRequest):
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Invalid image: {str(e)}")
 
-    # Run YOLO detection
-    results = model(img, conf=0.3, verbose=False)
+    # Run YOLO detection — low confidence for max detections
+    results = model(img, conf=0.15, verbose=False)
     detections = results[0]
 
     vehicles = []
