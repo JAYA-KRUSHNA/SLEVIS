@@ -127,8 +127,8 @@ def get_yolo_model():
 
 # COCO class IDs for vehicles
 VEHICLE_CLASSES = {
-    2: ('CAR', 'Sedan'),
-    3: ('2W', 'Motorcycle'),
+    2: ('CAR', 'Car'),
+    3: ('2W', 'Bike'),
     5: ('BUS', 'Bus'),
     7: ('CV', 'Truck'),
     1: ('2W', 'Bicycle'),
@@ -217,15 +217,17 @@ def get_vehicle_description(vtype, base_name, color, bbox_area, img_area):
 
     if vtype == 'CAR':
         if size_ratio > 0.15:
-            return f"{color} SUV/Large Car"
+            return f"{color} SUV"
         elif size_ratio > 0.05:
             return f"{color} Sedan"
         else:
             return f"{color} Hatchback"
+    elif vtype == 'AUTO':
+        return f"{color} Auto Rickshaw"
     elif vtype == '2W':
         if base_name == 'Bicycle':
             return f"{color} Bicycle"
-        return f"{color} Motorcycle/Scooter"
+        return f"{color} Bike"
     elif vtype == 'BUS':
         return f"{color} Bus"
     elif vtype == 'CV':
@@ -305,7 +307,16 @@ async def analyze_image(req: ImageAnalysisRequest):
         vtype, base_name = VEHICLE_CLASSES[cls_id]
         conf = float(box.conf[0])
         coords = box.xyxy[0].tolist()
-        bbox_area = (coords[2] - coords[0]) * (coords[3] - coords[1])
+        bbox_w = coords[2] - coords[0]
+        bbox_h = coords[3] - coords[1]
+        bbox_area = bbox_w * bbox_h
+        aspect_ratio = bbox_w / max(bbox_h, 1)
+
+        # Heuristic: small, squarish car-like detections → Auto Rickshaw
+        size_ratio = bbox_area / max(img_area, 1)
+        if vtype == 'CAR' and size_ratio < 0.04 and 0.6 < aspect_ratio < 1.5:
+            vtype = 'AUTO'
+            base_name = 'Auto Rickshaw'
 
         # Extract color from vehicle region
         color = get_dominant_color(img, coords)
@@ -313,27 +324,26 @@ async def analyze_image(req: ImageAnalysisRequest):
         # Generate descriptive model name
         model_desc = get_vehicle_description(vtype, base_name, color, bbox_area, img_area)
 
-        # Vehicle-type-specific violation checks
-        helmet_detected = True  # Default for non-2W vehicles
+        # ── Vehicle-type-specific violation checks ──
+        helmet_detected = None    # None = not applicable
+        seatbelt_detected = None  # None = not applicable
         violation_type = 'None'
 
         if vtype == '2W':
-            # Check if rider has person overlap (rider detected)
-            has_rider = check_person_overlap(coords, person_boxes)
-            if has_rider:
-                # YOLO can't detect helmets directly, flag as potential risk
-                helmet_detected = False
-                violation_type = 'No Helmet'
-                violation_count += 1
-            else:
-                helmet_detected = True  # No rider visible, can't check
+            # Bikes: check helmet — default to NO (can't verify from image)
+            helmet_detected = False
+            violation_type = 'No Helmet'
+            violation_count += 1
 
         elif vtype == 'CAR':
-            # Seatbelt can't be detected from outside view
-            # Check for visible person in driver seat area
-            has_person = check_person_overlap(coords, person_boxes)
-            if has_person:
-                violation_type = 'None'  # Can't verify seatbelt from exterior
+            # Cars: check seatbelt — default to NO (can't verify from exterior)
+            seatbelt_detected = False
+            violation_type = 'No Seatbelt'
+            violation_count += 1
+
+        elif vtype == 'AUTO':
+            # Autos: no helmet/seatbelt check
+            violation_type = 'None'
 
         vehicles.append({
             'license_plate': 'Not readable',
@@ -342,6 +352,7 @@ async def analyze_image(req: ImageAnalysisRequest):
             'color': color,
             'vehicle_type': vtype,
             'helmet_detected': helmet_detected,
+            'seatbelt_detected': seatbelt_detected,
             'violation_type': violation_type,
             'confidence': round(conf, 2),
         })

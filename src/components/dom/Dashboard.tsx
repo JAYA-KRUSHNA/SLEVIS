@@ -551,12 +551,27 @@ function VehicleAnalysis() {
                                                         ⚠ {result.violation_type}
                                                     </span>
                                                 )}
-                                                <span className={`inline-block px-3 py-1 rounded-lg text-sm font-medium ${result.helmet_detected
-                                                    ? 'bg-emerald-500/20 text-emerald-400'
-                                                    : 'bg-rose-500/20 text-rose-400'
-                                                    }`}>
-                                                    {result.helmet_detected ? '✓ Helmet OK' : '✕ No Helmet'}
-                                                </span>
+                                                {result.vehicle_type === '2W' && (
+                                                    <span className={`inline-block px-3 py-1 rounded-lg text-sm font-medium ${result.helmet_detected
+                                                        ? 'bg-emerald-500/20 text-emerald-400'
+                                                        : 'bg-rose-500/20 text-rose-400'
+                                                        }`}>
+                                                        {result.helmet_detected ? '✓ Helmet OK' : '✕ No Helmet'}
+                                                    </span>
+                                                )}
+                                                {result.vehicle_type === 'CAR' && (
+                                                    <span className={`inline-block px-3 py-1 rounded-lg text-sm font-medium ${(result as any).seatbelt_detected
+                                                        ? 'bg-emerald-500/20 text-emerald-400'
+                                                        : 'bg-amber-500/20 text-amber-400'
+                                                        }`}>
+                                                        {(result as any).seatbelt_detected ? '✓ Seatbelt OK' : '⚠ Seatbelt Unverified'}
+                                                    </span>
+                                                )}
+                                                {result.vehicle_type === 'AUTO' && (
+                                                    <span className="inline-block px-3 py-1 rounded-lg text-sm font-medium bg-blue-500/20 text-blue-400">
+                                                        Auto Rickshaw
+                                                    </span>
+                                                )}
                                             </div>
                                         </div>
                                     </GlassCard>
