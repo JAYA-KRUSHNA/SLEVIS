@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "concurrently --kill-others --kill-signal SIGKILL --names \"NEXT,ML\" --prefix-colors \"cyan,magenta\" \"next dev\" \"cd ml_backend && source venv/bin/activate && python server.py\"",
+    "dev": "concurrently --kill-others --kill-signal SIGTERM --names \"NEXT,ML\" --prefix-colors \"cyan,magenta\" \"next dev\" \"cd ml_backend && source venv/bin/activate && exec python server.py\"",
     "dev:next": "next dev",
     "dev:ml": "cd ml_backend && source venv/bin/activate && python server.py",
     "build": "next build",

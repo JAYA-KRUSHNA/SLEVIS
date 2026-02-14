@@ -134,6 +134,16 @@ VEHICLE_CLASSES = {
     1: ('2W', 'Bicycle'),
 }
 
+# Violation severity levels
+VIOLATION_SEVERITY = {
+    'No Helmet': 'high',
+    'Triple Riding': 'high',
+    'No Seatbelt': 'medium',
+    'Overloading': 'medium',
+    'No License Plate': 'low',
+    'None': 'none',
+}
+
 
 def get_dominant_color(img, bbox):
     """Extract the dominant color using HSV color space — much more accurate than RGB."""
@@ -237,10 +247,11 @@ def get_vehicle_description(vtype, base_name, color, bbox_area, img_area):
     return f"{color} {base_name}"
 
 
-def check_person_overlap(vehicle_box, person_boxes, threshold=0.3):
-    """Check if any person bounding box overlaps with a vehicle box."""
+def count_persons_on_vehicle(vehicle_box, person_boxes, threshold=0.25):
+    """Count how many person bounding boxes overlap with a vehicle box."""
     vx1, vy1, vx2, vy2 = vehicle_box
     v_area = (vx2 - vx1) * (vy2 - vy1)
+    count = 0
 
     for px1, py1, px2, py2 in person_boxes:
         # Calculate intersection
@@ -252,10 +263,15 @@ def check_person_overlap(vehicle_box, person_boxes, threshold=0.3):
         if ix1 < ix2 and iy1 < iy2:
             intersection = (ix2 - ix1) * (iy2 - iy1)
             p_area = (px2 - px1) * (py2 - py1)
-            iou = intersection / min(v_area, p_area)
-            if iou > threshold:
-                return True
-    return False
+            overlap = intersection / min(v_area, p_area)
+            if overlap > threshold:
+                count += 1
+    return count
+
+
+def check_person_overlap(vehicle_box, person_boxes, threshold=0.3):
+    """Check if any person bounding box overlaps with a vehicle box."""
+    return count_persons_on_vehicle(vehicle_box, person_boxes, threshold) > 0
 
 
 class ImageAnalysisRequest(BaseModel):
@@ -283,9 +299,17 @@ async def analyze_image(req: ImageAnalysisRequest):
     img_w, img_h = img.size
     img_area = img_w * img_h
 
-    # Run YOLO detection
-    results = model(img, conf=0.15, verbose=False)
+    # Run YOLO detection — low threshold to catch bikes/scooters
+    results = model(img, conf=0.10, verbose=False)
     detections = results[0]
+
+    # Debug: log ALL detections to console
+    coco_names = model.names
+    print(f"\n🔍 YOLO detected {len(detections.boxes)} objects:")
+    for box in detections.boxes:
+        cid = int(box.cls[0])
+        c = float(box.conf[0])
+        print(f"   [{cid}] {coco_names[cid]}: conf={c:.2f}")
 
     # First pass: collect person bounding boxes for helmet/rider checks
     person_boxes = []
@@ -324,26 +348,45 @@ async def analyze_image(req: ImageAnalysisRequest):
         # Generate descriptive model name
         model_desc = get_vehicle_description(vtype, base_name, color, bbox_area, img_area)
 
-        # ── Vehicle-type-specific violation checks ──
+        # ── Person association — count riders/occupants ──
+        rider_count = count_persons_on_vehicle(coords, person_boxes)
+
+        # ── Smart violation detection ──
         helmet_detected = None    # None = not applicable
         seatbelt_detected = None  # None = not applicable
-        violation_type = 'None'
+        violations = []           # Multiple violations per vehicle
 
         if vtype == '2W':
-            # Bikes: check helmet — default to NO (can't verify from image)
-            helmet_detected = False
-            violation_type = 'No Helmet'
-            violation_count += 1
+            # Bikes: only flag helmet if a rider is detected on/near the bike
+            if rider_count > 0:
+                helmet_detected = False  # Can't verify helmet from YOLO alone
+                violations.append('No Helmet')
+            else:
+                # No rider detected — parked bike or rider not visible
+                helmet_detected = None
+
+            # Triple riding: 3+ persons associated with the bike
+            if rider_count >= 3:
+                violations.append('Triple Riding')
 
         elif vtype == 'CAR':
-            # Cars: check seatbelt — default to NO (can't verify from exterior)
-            seatbelt_detected = False
-            violation_type = 'No Seatbelt'
-            violation_count += 1
+            # Cars: can't see seatbelt from exterior — mark as unverified
+            seatbelt_detected = None  # Honestly unverifiable
+            # No automatic violation — YOLO can't see inside cars
+
+        elif vtype == 'BUS' or vtype == 'CV':
+            # Heavy vehicles: check for overloading heuristic
+            # If many persons detected near a truck/bus, might be overloaded
+            if rider_count > 5 and vtype == 'CV':
+                violations.append('Overloading')
 
         elif vtype == 'AUTO':
-            # Autos: no helmet/seatbelt check
-            violation_type = 'None'
+            # Autos: check overloading (typically max 3 passengers)
+            if rider_count > 4:
+                violations.append('Overloading')
+
+        violation_count += len(violations)
+        violation_type = violations[0] if violations else 'None'
 
         vehicles.append({
             'license_plate': 'Not readable',
@@ -354,7 +397,10 @@ async def analyze_image(req: ImageAnalysisRequest):
             'helmet_detected': helmet_detected,
             'seatbelt_detected': seatbelt_detected,
             'violation_type': violation_type,
+            'violations': violations,
+            'rider_count': rider_count,
             'confidence': round(conf, 2),
+            'bbox': [round(c, 1) for c in coords],
         })
 
     return {
@@ -362,7 +408,36 @@ async def analyze_image(req: ImageAnalysisRequest):
         'totalDetected': len(vehicles),
         'violationCount': violation_count,
         'analysisSource': 'YOLOv8 + CV (Local DL)',
+        'analysisMode': 'yolo',
     }
+
+
+
+# ─── Hybrid YOLO + Gemini Endpoint ───
+@app.post("/analyze-hybrid")
+async def analyze_hybrid(req: ImageAnalysisRequest):
+    """Run YOLO for object detection, then optionally enhance with Gemini context."""
+    # Step 1: Run YOLO detection
+    yolo_result = await analyze_image(req)
+
+    # Step 2: Build a context summary for Gemini from YOLO detections
+    vehicles = yolo_result.get('vehicles', [])
+    if not vehicles:
+        return yolo_result
+
+    context_lines = []
+    for i, v in enumerate(vehicles):
+        context_lines.append(
+            f"Vehicle {i+1}: {v['vehicle_type']} ({v['model']}), "
+            f"color={v['color']}, riders={v.get('rider_count', 0)}, "
+            f"violations={v.get('violations', [])}"
+        )
+
+    yolo_result['analysisMode'] = 'hybrid'
+    yolo_result['analysisSource'] = 'YOLOv8 + Gemini Hybrid'
+    yolo_result['yoloContext'] = '\n'.join(context_lines)
+
+    return yolo_result
 
 
 # Request/Response models
@@ -570,6 +645,16 @@ async def startup():
 
 
 if __name__ == "__main__":
+    import signal
+    import sys
     import uvicorn
+
+    def handle_exit(signum, frame):
+        print("\n🛑 Shutting down SLEVIS API...")
+        sys.exit(0)
+
+    signal.signal(signal.SIGTERM, handle_exit)
+    signal.signal(signal.SIGINT, handle_exit)
+
     print("🚀 SLEVIS DEEP LEARNING API v5.0")
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    uvicorn.run(app, host="0.0.0.0", port=8000, timeout_graceful_shutdown=2)

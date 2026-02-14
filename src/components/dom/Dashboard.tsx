@@ -208,9 +208,23 @@ function VehicleAnalysis() {
     const [imageUrl, setImageUrl] = useState('');
     const [inputMode, setInputMode] = useState<'upload' | 'url'>('upload');
     const [analyzing, setAnalyzing] = useState(false);
-    const [results, setResults] = useState<Array<Partial<Vehicle> & { plate_readable?: boolean; confidence?: number }>>([]);
+    const [results, setResults] = useState<Array<{
+        license_plate?: string;
+        plate_readable?: boolean;
+        model?: string;
+        color?: string;
+        vehicle_type?: string;
+        helmet_detected?: boolean | null;
+        seatbelt_detected?: boolean | null;
+        violation_type?: string;
+        violations?: string[];
+        rider_count?: number;
+        confidence?: number;
+        bbox?: number[];
+    }>>([]);
     const [error, setError] = useState('');
     const [progress, setProgress] = useState(0);
+    const [analysisMode, setAnalysisMode] = useState<string>('');
 
     const handleDrop = useCallback((e: React.DragEvent) => {
         e.preventDefault();
@@ -274,6 +288,7 @@ function VehicleAnalysis() {
             }
 
             setResults(data.vehicles || []);
+            setAnalysisMode(data.analysisMode || 'unknown');
         } catch (err: any) {
             clearInterval(progressInterval);
             setError(err.message || 'Network error');
@@ -290,7 +305,34 @@ function VehicleAnalysis() {
         setProgress(0);
     };
 
-    const violationCount = results.filter(r => r.violation_type !== 'None').length;
+    const violationCount = results.filter(r => (r.violations?.length ?? 0) > 0 || (r.violation_type && r.violation_type !== 'None')).length;
+
+    const VEHICLE_ICONS: Record<string, string> = {
+        '2W': '🏍️',
+        'CAR': '🚗',
+        'CV': '🚛',
+        'BUS': '🚌',
+        'AUTO': '🛺',
+    };
+
+    const SOURCE_STYLES: Record<string, { bg: string; border: string; text: string; dot: string; label: string }> = {
+        gemini: { bg: 'bg-blue-500/15', border: 'border-blue-500/40', text: 'text-blue-400', dot: 'bg-blue-400', label: 'Gemini Vision AI' },
+        yolo: { bg: 'bg-emerald-500/15', border: 'border-emerald-500/40', text: 'text-emerald-400', dot: 'bg-emerald-400', label: 'YOLOv8 Local DL' },
+        hybrid: { bg: 'bg-purple-500/15', border: 'border-purple-500/40', text: 'text-purple-400', dot: 'bg-purple-400', label: 'YOLO + Gemini Hybrid' },
+        fallback: { bg: 'bg-amber-500/15', border: 'border-amber-500/40', text: 'text-amber-400', dot: 'bg-amber-400', label: 'Fallback Detection' },
+    };
+
+    const VIOLATION_COLORS: Record<string, string> = {
+        'No Helmet': 'bg-rose-500/20 text-rose-400',
+        'Triple Riding': 'bg-red-500/20 text-red-400',
+        'No Seatbelt': 'bg-amber-500/20 text-amber-400',
+        'Overloading': 'bg-orange-500/20 text-orange-400',
+        'Wrong Side': 'bg-rose-500/20 text-rose-400',
+        'Using Phone': 'bg-amber-500/20 text-amber-400',
+        'Signal Jump': 'bg-red-500/20 text-red-400',
+        'Reckless Driving': 'bg-red-500/20 text-red-400',
+        'No License Plate': 'bg-gray-500/20 text-gray-400',
+    };
 
     return (
         <div className="h-full flex flex-col">
@@ -499,84 +541,115 @@ function VehicleAnalysis() {
                                 </div>
                             </GlassCard>
 
-                            {/* AI Source Badge */}
+                            {/* AI Source Badge — Dynamic */}
                             <div className="flex items-center justify-center mb-4">
-                                <span className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-blue-500/15 border border-blue-500/40 text-blue-400 text-xs font-medium">
-                                    <span className="relative flex h-2 w-2">
-                                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
-                                        <span className="relative inline-flex rounded-full h-2 w-2 bg-blue-500"></span>
-                                    </span>
-                                    Powered by Gemini Vision AI
-                                </span>
+                                {(() => {
+                                    const style = SOURCE_STYLES[analysisMode] || SOURCE_STYLES.fallback;
+                                    return (
+                                        <span className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-full ${style.bg} border ${style.border} ${style.text} text-xs font-medium`}>
+                                            <span className="relative flex h-2 w-2">
+                                                <span className={`animate-ping absolute inline-flex h-full w-full rounded-full ${style.dot} opacity-75`}></span>
+                                                <span className={`relative inline-flex rounded-full h-2 w-2 ${style.dot}`}></span>
+                                            </span>
+                                            Powered by {style.label}
+                                        </span>
+                                    );
+                                })()}
                             </div>
 
                             {/* Vehicle Cards */}
-                            {results.map((result, index) => (
-                                <motion.div
-                                    key={index}
-                                    initial={{ opacity: 0, x: -30 }}
-                                    animate={{ opacity: 1, x: 0 }}
-                                    transition={{ delay: 0.4 + index * 0.1 }}
-                                >
-                                    <GlassCard
-                                        className={`p-4 ${result.violation_type !== 'None' ? 'border-rose-500/30' : ''}`}
-                                        glow={result.violation_type !== 'None' ? 'pink' : 'cyan'}
+                            {results.map((result, index) => {
+                                const violations: string[] = result.violations || (result.violation_type && result.violation_type !== 'None' ? [result.violation_type] : []);
+                                const riderCount: number = result.rider_count || 0;
+                                const hasViolation = violations.length > 0;
+                                const vehicleIcon = VEHICLE_ICONS[result.vehicle_type || ''] || '🚗';
+
+                                return (
+                                    <motion.div
+                                        key={index}
+                                        initial={{ opacity: 0, x: -30 }}
+                                        animate={{ opacity: 1, x: 0 }}
+                                        transition={{ delay: 0.4 + index * 0.1 }}
                                     >
-                                        <div className="flex items-center justify-between">
-                                            <div className="flex items-center gap-4">
-                                                <div className={`w-12 h-12 rounded-xl flex items-center justify-center font-orbitron font-bold ${result.violation_type !== 'None'
-                                                    ? 'bg-gradient-to-br from-rose-500/30 to-orange-500/30 text-rose-400'
-                                                    : 'bg-gradient-to-br from-cyan-500/30 to-blue-500/30 text-cyan-400'
-                                                    }`}>
-                                                    #{index + 1}
-                                                </div>
-                                                <div>
-                                                    <div className="flex items-center gap-2">
-                                                        <p className={`font-orbitron text-lg ${result.plate_readable === false ? 'text-gray-500 italic' : 'text-white'}`}>
-                                                            {result.license_plate || 'Not readable'}
-                                                        </p>
-                                                        {result.plate_readable === false && (
-                                                            <span className="px-2 py-0.5 rounded text-[10px] bg-gray-700/50 text-gray-500 uppercase">unreadable</span>
-                                                        )}
+                                        <GlassCard
+                                            className={`p-4 ${hasViolation ? 'border-rose-500/30' : ''}`}
+                                            glow={hasViolation ? 'pink' : 'cyan'}
+                                        >
+                                            <div className="flex items-start justify-between">
+                                                <div className="flex items-center gap-4">
+                                                    <div className={`w-12 h-12 rounded-xl flex items-center justify-center text-2xl ${hasViolation
+                                                        ? 'bg-gradient-to-br from-rose-500/30 to-orange-500/30'
+                                                        : 'bg-gradient-to-br from-cyan-500/30 to-blue-500/30'
+                                                        }`}>
+                                                        {vehicleIcon}
                                                     </div>
-                                                    <p className="text-sm text-gray-400">{result.model} • {result.color}</p>
-                                                    {result.confidence !== undefined && (
-                                                        <p className="text-xs text-gray-600 mt-0.5">{Math.round(result.confidence * 100)}% confidence</p>
+                                                    <div>
+                                                        <div className="flex items-center gap-2">
+                                                            <p className={`font-orbitron text-lg ${result.plate_readable === false ? 'text-gray-500 italic' : 'text-white'}`}>
+                                                                {result.license_plate || 'Not readable'}
+                                                            </p>
+                                                            {result.plate_readable === false && (
+                                                                <span className="px-2 py-0.5 rounded text-[10px] bg-gray-700/50 text-gray-500 uppercase">unreadable</span>
+                                                            )}
+                                                        </div>
+                                                        <p className="text-sm text-gray-400">{result.model} • {result.color}</p>
+                                                        <div className="flex items-center gap-3 mt-1">
+                                                            {result.confidence !== undefined && (
+                                                                <p className="text-xs text-gray-600">{Math.round(result.confidence * 100)}% confidence</p>
+                                                            )}
+                                                            {riderCount > 0 && (
+                                                                <span className="text-xs text-gray-500">👤 {riderCount} {result.vehicle_type === '2W' ? 'rider' : 'occupant'}{riderCount !== 1 ? 's' : ''}</span>
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                                <div className="text-right space-y-1.5 flex flex-col items-end">
+                                                    {/* Multiple violation badges */}
+                                                    {violations.map((v, vi) => (
+                                                        <span key={vi} className={`inline-block px-3 py-1 rounded-lg text-sm font-medium ${VIOLATION_COLORS[v] || 'bg-rose-500/20 text-rose-400'}`}>
+                                                            ⚠ {v}
+                                                        </span>
+                                                    ))}
+                                                    {/* Helmet status for 2W */}
+                                                    {result.vehicle_type === '2W' && result.helmet_detected !== null && result.helmet_detected !== undefined && (
+                                                        <span className={`inline-block px-3 py-1 rounded-lg text-sm font-medium ${result.helmet_detected
+                                                            ? 'bg-emerald-500/20 text-emerald-400'
+                                                            : 'bg-rose-500/20 text-rose-400'
+                                                            }`}>
+                                                            {result.helmet_detected ? '✓ Helmet OK' : '✕ No Helmet'}
+                                                        </span>
+                                                    )}
+                                                    {/* Seatbelt status for CAR */}
+                                                    {result.vehicle_type === 'CAR' && (
+                                                        <span className={`inline-block px-3 py-1 rounded-lg text-sm font-medium ${result.seatbelt_detected === true
+                                                            ? 'bg-emerald-500/20 text-emerald-400'
+                                                            : result.seatbelt_detected === false
+                                                                ? 'bg-rose-500/20 text-rose-400'
+                                                                : 'bg-gray-500/20 text-gray-400'
+                                                            }`}>
+                                                            {result.seatbelt_detected === true ? '✓ Seatbelt OK'
+                                                                : result.seatbelt_detected === false ? '✕ No Seatbelt'
+                                                                    : '◌ Seatbelt Unverified'}
+                                                        </span>
+                                                    )}
+                                                    {/* Auto rickshaw badge */}
+                                                    {result.vehicle_type === 'AUTO' && violations.length === 0 && (
+                                                        <span className="inline-block px-3 py-1 rounded-lg text-sm font-medium bg-blue-500/20 text-blue-400">
+                                                            Auto Rickshaw
+                                                        </span>
+                                                    )}
+                                                    {/* No violations = clean */}
+                                                    {violations.length === 0 && result.vehicle_type !== 'AUTO' && result.vehicle_type !== '2W' && result.vehicle_type !== 'CAR' && (
+                                                        <span className="inline-block px-3 py-1 rounded-lg text-sm font-medium bg-emerald-500/20 text-emerald-400">
+                                                            ✓ No Violations
+                                                        </span>
                                                     )}
                                                 </div>
                                             </div>
-                                            <div className="text-right space-y-1">
-                                                {result.violation_type && result.violation_type !== 'None' && (
-                                                    <span className="inline-block px-3 py-1 rounded-lg text-sm font-medium bg-rose-500/20 text-rose-400">
-                                                        ⚠ {result.violation_type}
-                                                    </span>
-                                                )}
-                                                {result.vehicle_type === '2W' && (
-                                                    <span className={`inline-block px-3 py-1 rounded-lg text-sm font-medium ${result.helmet_detected
-                                                        ? 'bg-emerald-500/20 text-emerald-400'
-                                                        : 'bg-rose-500/20 text-rose-400'
-                                                        }`}>
-                                                        {result.helmet_detected ? '✓ Helmet OK' : '✕ No Helmet'}
-                                                    </span>
-                                                )}
-                                                {result.vehicle_type === 'CAR' && (
-                                                    <span className={`inline-block px-3 py-1 rounded-lg text-sm font-medium ${(result as any).seatbelt_detected
-                                                        ? 'bg-emerald-500/20 text-emerald-400'
-                                                        : 'bg-amber-500/20 text-amber-400'
-                                                        }`}>
-                                                        {(result as any).seatbelt_detected ? '✓ Seatbelt OK' : '⚠ Seatbelt Unverified'}
-                                                    </span>
-                                                )}
-                                                {result.vehicle_type === 'AUTO' && (
-                                                    <span className="inline-block px-3 py-1 rounded-lg text-sm font-medium bg-blue-500/20 text-blue-400">
-                                                        Auto Rickshaw
-                                                    </span>
-                                                )}
-                                            </div>
-                                        </div>
-                                    </GlassCard>
-                                </motion.div>
-                            ))}
+                                        </GlassCard>
+                                    </motion.div>
+                                );
+                            })}
                         </motion.div>
                     )}
                 </div>
