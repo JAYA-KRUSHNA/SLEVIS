@@ -51,6 +51,50 @@ export async function callGemini(prompt: string): Promise<string> {
     return data.candidates[0].content.parts[0].text;
 }
 
+export async function callGeminiVision(prompt: string, imageBase64: string, mimeType: string = 'image/jpeg'): Promise<string> {
+    if (!GEMINI_API_KEY) {
+        throw new Error('GOOGLE_GEMINI_API_KEY not configured');
+    }
+
+    const response = await fetch(`${GEMINI_API_URL}?key=${GEMINI_API_KEY}`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+            contents: [
+                {
+                    parts: [
+                        { text: prompt },
+                        {
+                            inline_data: {
+                                mime_type: mimeType,
+                                data: imageBase64,
+                            },
+                        },
+                    ],
+                },
+            ],
+            generationConfig: {
+                temperature: 0.2,
+                maxOutputTokens: 2048,
+            },
+        }),
+    });
+
+    const data: GeminiResponse = await response.json();
+
+    if (data.error) {
+        throw new Error(data.error.message);
+    }
+
+    if (!data.candidates || data.candidates.length === 0) {
+        throw new Error('No response from Gemini Vision');
+    }
+
+    return data.candidates[0].content.parts[0].text;
+}
+
 // Complaint Classification Categories
 export const COMPLAINT_CATEGORIES = [
     'reckless_driving',

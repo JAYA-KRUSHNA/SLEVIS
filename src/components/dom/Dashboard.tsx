@@ -208,7 +208,7 @@ function VehicleAnalysis() {
     const [imageUrl, setImageUrl] = useState('');
     const [inputMode, setInputMode] = useState<'upload' | 'url'>('upload');
     const [analyzing, setAnalyzing] = useState(false);
-    const [results, setResults] = useState<Partial<Vehicle>[]>([]);
+    const [results, setResults] = useState<Array<Partial<Vehicle> & { plate_readable?: boolean; confidence?: number }>>([]);
     const [error, setError] = useState('');
     const [progress, setProgress] = useState(0);
 
@@ -248,63 +248,33 @@ function VehicleAnalysis() {
 
         // Animated progress
         const progressInterval = setInterval(() => {
-            setProgress(prev => Math.min(prev + Math.random() * 15, 95));
-        }, 200);
+            setProgress(prev => Math.min(prev + Math.random() * 8, 90));
+        }, 300);
 
-        await new Promise((resolve) => setTimeout(resolve, 3000));
-        clearInterval(progressInterval);
-        setProgress(100);
-
-        // Generate multiple vehicles (5-12 for 75%+ detection rate)
-        const vehicleCount = Math.floor(Math.random() * 8) + 5;
-        const mockResults: Partial<Vehicle>[] = [];
-
-        // Mixed vehicle types including cars, bikes, trucks, autos
-        const vehicleCategories = [
-            // Two-wheelers (bikes/scooters)
-            { type: '2W', models: ['Honda Activa', 'Royal Enfield Classic 350', 'TVS Jupiter', 'Bajaj Pulsar NS200', 'Hero Splendor Plus', 'Yamaha FZ-S', 'KTM Duke 390', 'Suzuki Access 125', 'Ola S1 Pro', 'Ather 450X'] },
-            // Cars
-            { type: 'CAR', models: ['Maruti Swift Dzire', 'Hyundai i20', 'Toyota Innova Crysta', 'Honda City', 'Tata Nexon', 'Mahindra XUV700', 'Kia Seltos', 'MG Hector', 'Volkswagen Polo', 'Skoda Slavia'] },
-            // Commercial vehicles
-            { type: 'CV', models: ['Tata Ace', 'Mahindra Bolero Pickup', 'Ashok Leyland Truck', 'Eicher Truck', 'TATA 407', 'Force Tempo', 'Bajaj RE Auto', 'Piaggio Ape', 'Mahindra Treo', 'TVS King'] },
-            // Buses
-            { type: 'BUS', models: ['KSRTC Bus', 'BMTC Bus', 'Volvo Bus', 'Ashok Leyland Bus', 'Tata Starbus', 'Force Traveller'] },
-        ];
-
-        const colors = ['Midnight Black', 'Racing Red', 'Royal Blue', 'Pearl White', 'Metallic Silver', 'Sunset Orange', 'Graphite Grey', 'Forest Green', 'Champagne Gold', 'Electric Blue'];
-        const states = ['KA', 'MH', 'TN', 'DL', 'GJ', 'RJ', 'AP', 'TS', 'UP', 'KL'];
-
-        // Violation types for different vehicle categories
-        const violationTypes = {
-            '2W': ['No Helmet', 'Triple Riding', 'No License Plate', 'Wrong Side', 'No Side Mirror'],
-            'CAR': ['No Seatbelt', 'Using Phone', 'No License Plate', 'Tinted Glass', 'Wrong Parking'],
-            'CV': ['Overloading', 'No Permit', 'Expired Fitness', 'No Reflectors', 'Wrong Lane'],
-            'BUS': ['Overcrowding', 'Speed Violation', 'Improper Stop', 'Expired Permit', 'Safety Violation'],
-        };
-
-        for (let i = 0; i < vehicleCount; i++) {
-            // Random vehicle category
-            const category = vehicleCategories[Math.floor(Math.random() * vehicleCategories.length)];
-            const model = category.models[Math.floor(Math.random() * category.models.length)];
-            const color = colors[Math.floor(Math.random() * colors.length)];
-            const state = states[Math.floor(Math.random() * states.length)];
-
-            // 60% chance of no violation
-            const hasViolation = Math.random() > 0.6;
-            const categoryViolations = violationTypes[category.type as keyof typeof violationTypes];
-            const violation = hasViolation ? categoryViolations[Math.floor(Math.random() * categoryViolations.length)] : 'None';
-
-            mockResults.push({
-                license_plate: `${state}-${Math.floor(Math.random() * 99).toString().padStart(2, '0')}-${String.fromCharCode(65 + Math.floor(Math.random() * 26))}${String.fromCharCode(65 + Math.floor(Math.random() * 26))}-${Math.floor(1000 + Math.random() * 9000)}`,
-                model: model,
-                color: color,
-                helmet_detected: category.type === '2W' ? violation !== 'No Helmet' : true,
-                violation_type: violation,
+        try {
+            const response = await fetch('/api/analyze-vehicle', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ imageData: image }),
             });
+
+            clearInterval(progressInterval);
+            setProgress(100);
+
+            const data = await response.json();
+
+            if (!response.ok || data.error) {
+                setError(data.error || 'Analysis failed');
+                setAnalyzing(false);
+                return;
+            }
+
+            setResults(data.vehicles || []);
+        } catch (err: any) {
+            clearInterval(progressInterval);
+            setError(err.message || 'Network error');
         }
 
-        await new Promise(r => setTimeout(r, 300));
-        setResults(mockResults);
         setAnalyzing(false);
     };
 
@@ -525,6 +495,17 @@ function VehicleAnalysis() {
                                 </div>
                             </GlassCard>
 
+                            {/* AI Source Badge */}
+                            <div className="flex items-center justify-center mb-4">
+                                <span className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-blue-500/15 border border-blue-500/40 text-blue-400 text-xs font-medium">
+                                    <span className="relative flex h-2 w-2">
+                                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
+                                        <span className="relative inline-flex rounded-full h-2 w-2 bg-blue-500"></span>
+                                    </span>
+                                    Powered by Gemini Vision AI
+                                </span>
+                            </div>
+
                             {/* Vehicle Cards */}
                             {results.map((result, index) => (
                                 <motion.div
@@ -546,11 +527,26 @@ function VehicleAnalysis() {
                                                     #{index + 1}
                                                 </div>
                                                 <div>
-                                                    <p className="font-orbitron text-lg text-white">{result.license_plate}</p>
+                                                    <div className="flex items-center gap-2">
+                                                        <p className={`font-orbitron text-lg ${result.plate_readable === false ? 'text-gray-500 italic' : 'text-white'}`}>
+                                                            {result.license_plate || 'Not readable'}
+                                                        </p>
+                                                        {result.plate_readable === false && (
+                                                            <span className="px-2 py-0.5 rounded text-[10px] bg-gray-700/50 text-gray-500 uppercase">unreadable</span>
+                                                        )}
+                                                    </div>
                                                     <p className="text-sm text-gray-400">{result.model} • {result.color}</p>
+                                                    {result.confidence !== undefined && (
+                                                        <p className="text-xs text-gray-600 mt-0.5">{Math.round(result.confidence * 100)}% confidence</p>
+                                                    )}
                                                 </div>
                                             </div>
-                                            <div className="text-right">
+                                            <div className="text-right space-y-1">
+                                                {result.violation_type && result.violation_type !== 'None' && (
+                                                    <span className="inline-block px-3 py-1 rounded-lg text-sm font-medium bg-rose-500/20 text-rose-400">
+                                                        ⚠ {result.violation_type}
+                                                    </span>
+                                                )}
                                                 <span className={`inline-block px-3 py-1 rounded-lg text-sm font-medium ${result.helmet_detected
                                                     ? 'bg-emerald-500/20 text-emerald-400'
                                                     : 'bg-rose-500/20 text-rose-400'
@@ -1248,17 +1244,17 @@ function ViolationPredictor() {
                                 className="flex items-center justify-center gap-3 mb-8"
                             >
                                 <div className={`inline-flex items-center gap-2 px-4 py-2 rounded-full border text-sm font-medium ${result.modelUsed.includes('DL') || result.modelUsed.includes('Ensemble')
-                                        ? 'bg-purple-500/15 border-purple-500/40 text-purple-400'
-                                        : result.modelUsed.includes('Gemini')
-                                            ? 'bg-blue-500/15 border-blue-500/40 text-blue-400'
-                                            : 'bg-gray-500/15 border-gray-500/40 text-gray-400'
+                                    ? 'bg-purple-500/15 border-purple-500/40 text-purple-400'
+                                    : result.modelUsed.includes('Gemini')
+                                        ? 'bg-blue-500/15 border-blue-500/40 text-blue-400'
+                                        : 'bg-gray-500/15 border-gray-500/40 text-gray-400'
                                     }`}>
                                     <span className="relative flex h-2 w-2">
                                         <span className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${result.modelUsed.includes('DL') || result.modelUsed.includes('Ensemble') ? 'bg-purple-400' :
-                                                result.modelUsed.includes('Gemini') ? 'bg-blue-400' : 'bg-gray-400'
+                                            result.modelUsed.includes('Gemini') ? 'bg-blue-400' : 'bg-gray-400'
                                             }`}></span>
                                         <span className={`relative inline-flex rounded-full h-2 w-2 ${result.modelUsed.includes('DL') || result.modelUsed.includes('Ensemble') ? 'bg-purple-500' :
-                                                result.modelUsed.includes('Gemini') ? 'bg-blue-500' : 'bg-gray-500'
+                                            result.modelUsed.includes('Gemini') ? 'bg-blue-500' : 'bg-gray-500'
                                             }`}></span>
                                     </span>
                                     <span>Powered by {result.modelUsed}</span>
