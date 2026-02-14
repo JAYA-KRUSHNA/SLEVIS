@@ -263,10 +263,14 @@ function VehicleAnalysis() {
 
             const data = await response.json();
 
-            if (!response.ok || data.error) {
+            if (!response.ok && !data.vehicles) {
                 setError(data.error || 'Analysis failed');
                 setAnalyzing(false);
                 return;
+            }
+
+            if (data.warning) {
+                setError(`⚠️ ${data.warning}`);
             }
 
             setResults(data.vehicles || []);

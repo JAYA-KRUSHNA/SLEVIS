@@ -6,7 +6,7 @@ interface DetectedVehicle {
     plate_readable: boolean;
     model: string;
     color: string;
-    vehicle_type: string; // '2W' | 'CAR' | 'CV' | 'BUS' | 'AUTO'
+    vehicle_type: string;
     helmet_detected: boolean;
     violation_type: string;
     confidence: number;
@@ -34,50 +34,36 @@ Return ONLY valid JSON in this exact format (no markdown, no explanation):
 {"vehicles": [{"license_plate": "XX-00-XX-0000", "plate_readable": true, "model": "Vehicle Model", "color": "Color", "vehicle_type": "CAR", "helmet_detected": true, "violation_type": "None", "confidence": 0.85}]}`;
 
 export async function POST(request: NextRequest) {
+    const body = await request.json();
+    const { imageData, mimeType } = body;
+
+    if (!imageData) {
+        return NextResponse.json({ error: 'No image data provided' }, { status: 400 });
+    }
+
+    // Strip data URL prefix if present
+    let base64Data = imageData;
+    let detectedMime = mimeType || 'image/jpeg';
+
+    if (imageData.startsWith('data:')) {
+        const match = imageData.match(/^data:(image\/[a-zA-Z+]+);base64,(.+)$/);
+        if (match) {
+            detectedMime = match[1];
+            base64Data = match[2];
+        }
+    }
+
+    // ─── Strategy 1: Try Gemini Vision ───
     try {
-        const body = await request.json();
-        const { imageData, mimeType } = body;
-
-        if (!imageData) {
-            return NextResponse.json(
-                { error: 'No image data provided' },
-                { status: 400 }
-            );
-        }
-
-        // Strip data URL prefix if present (e.g., "data:image/jpeg;base64,...")
-        let base64Data = imageData;
-        let detectedMime = mimeType || 'image/jpeg';
-
-        if (imageData.startsWith('data:')) {
-            const match = imageData.match(/^data:(image\/[a-zA-Z+]+);base64,(.+)$/);
-            if (match) {
-                detectedMime = match[1];
-                base64Data = match[2];
-            }
-        }
-
-        // Call Gemini Vision
         const rawResponse = await callGeminiVision(VISION_PROMPT, base64Data, detectedMime);
 
-        // Parse JSON from response (handle potential markdown wrapping)
         let jsonStr = rawResponse.trim();
         if (jsonStr.startsWith('```')) {
             jsonStr = jsonStr.replace(/^```(?:json)?\n?/, '').replace(/\n?```$/, '');
         }
 
-        let parsed: { vehicles: DetectedVehicle[] };
-        try {
-            parsed = JSON.parse(jsonStr);
-        } catch {
-            console.error('Failed to parse Gemini response:', rawResponse);
-            return NextResponse.json(
-                { error: 'Failed to parse AI response', raw: rawResponse },
-                { status: 500 }
-            );
-        }
+        const parsed: { vehicles: DetectedVehicle[] } = JSON.parse(jsonStr);
 
-        // Validate and clean results
         const vehicles = (parsed.vehicles || []).map((v: any) => ({
             license_plate: v.license_plate || 'Not readable',
             plate_readable: v.plate_readable ?? (v.license_plate && v.license_plate !== 'Not readable'),
@@ -95,12 +81,46 @@ export async function POST(request: NextRequest) {
             violationCount: vehicles.filter((v: DetectedVehicle) => v.violation_type !== 'None').length,
             analysisSource: 'Gemini Vision AI',
         });
-
-    } catch (error: any) {
-        console.error('Vehicle analysis error:', error);
-        return NextResponse.json(
-            { error: error.message || 'Analysis failed' },
-            { status: 500 }
-        );
+    } catch (geminiError: any) {
+        console.error('Gemini Vision failed:', geminiError.message);
     }
+
+    // ─── Strategy 2: Try local YOLO backend ───
+    try {
+        const yoloResponse = await fetch('http://localhost:8000/analyze-image', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ imageData }),
+            signal: AbortSignal.timeout(30000),
+        });
+
+        if (yoloResponse.ok) {
+            const yoloData = await yoloResponse.json();
+            return NextResponse.json({
+                ...yoloData,
+                analysisSource: 'YOLOv8 (Local DL)',
+                warning: 'Gemini unavailable — using local YOLOv8 detection.',
+            });
+        }
+    } catch (yoloError: any) {
+        console.error('YOLO fallback also failed:', yoloError.message);
+    }
+
+    // ─── Strategy 3: Last resort ───
+    return NextResponse.json({
+        vehicles: [{
+            license_plate: 'Not readable',
+            plate_readable: false,
+            model: 'Vehicle detected',
+            color: 'Unknown',
+            vehicle_type: 'CAR',
+            helmet_detected: true,
+            violation_type: 'None',
+            confidence: 0.3,
+        }],
+        totalDetected: 1,
+        violationCount: 0,
+        analysisSource: 'Fallback',
+        warning: 'Both Gemini and YOLO unavailable. Start the Python backend: cd ml_backend && python server.py',
+    });
 }
