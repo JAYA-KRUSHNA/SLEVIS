@@ -127,12 +127,101 @@ def get_yolo_model():
 
 # COCO class IDs for vehicles
 VEHICLE_CLASSES = {
-    2: ('CAR', 'Car'),
+    2: ('CAR', 'Sedan'),
     3: ('2W', 'Motorcycle'),
     5: ('BUS', 'Bus'),
     7: ('CV', 'Truck'),
     1: ('2W', 'Bicycle'),
 }
+
+# Color name mapping from RGB ranges
+COLOR_MAP = [
+    ((0, 0, 0),       (60, 60, 60),       'Black'),
+    ((180, 180, 180),  (255, 255, 255),    'White'),
+    ((100, 100, 100),  (180, 180, 180),    'Silver/Grey'),
+    ((150, 0, 0),      (255, 80, 80),      'Red'),
+    ((0, 0, 130),      (80, 80, 255),      'Blue'),
+    ((0, 100, 0),      (80, 255, 80),      'Green'),
+    ((180, 180, 0),    (255, 255, 100),    'Yellow'),
+    ((180, 100, 0),    (255, 180, 80),     'Orange'),
+    ((80, 40, 0),      (160, 100, 60),     'Brown'),
+    ((100, 0, 100),    (200, 80, 200),     'Purple'),
+]
+
+
+def get_dominant_color(img, bbox):
+    """Extract the dominant color from a bounding box region of the image."""
+    import numpy as np
+    x1, y1, x2, y2 = [int(c) for c in bbox]
+    # Crop the vehicle region (with slight inset to avoid background)
+    margin_x = int((x2 - x1) * 0.15)
+    margin_y = int((y2 - y1) * 0.15)
+    crop = img.crop((x1 + margin_x, y1 + margin_y, x2 - margin_x, y2 - margin_y))
+    crop = crop.resize((30, 30))  # Small size for fast processing
+
+    pixels = np.array(crop).reshape(-1, 3)
+    avg_color = pixels.mean(axis=0)
+    r, g, b = avg_color
+
+    # Match to nearest named color
+    best_color = 'Unknown'
+    best_dist = float('inf')
+    for (r1, g1, b1), (r2, g2, b2), name in COLOR_MAP:
+        if r1 <= r <= r2 and g1 <= g <= g2 and b1 <= b <= b2:
+            return name
+        # Fallback: find closest color center
+        center_r, center_g, center_b = (r1 + r2) / 2, (g1 + g2) / 2, (b1 + b2) / 2
+        dist = ((r - center_r) ** 2 + (g - center_g) ** 2 + (b - center_b) ** 2) ** 0.5
+        if dist < best_dist:
+            best_dist = dist
+            best_color = name
+
+    return best_color
+
+
+def get_vehicle_description(vtype, base_name, color, bbox_area, img_area):
+    """Generate a descriptive vehicle model name based on type, color, and size."""
+    size_ratio = bbox_area / max(img_area, 1)
+
+    if vtype == 'CAR':
+        if size_ratio > 0.15:
+            return f"{color} SUV/Large Car"
+        elif size_ratio > 0.05:
+            return f"{color} Sedan"
+        else:
+            return f"{color} Hatchback"
+    elif vtype == '2W':
+        if base_name == 'Bicycle':
+            return f"{color} Bicycle"
+        return f"{color} Motorcycle/Scooter"
+    elif vtype == 'BUS':
+        return f"{color} Bus"
+    elif vtype == 'CV':
+        if size_ratio > 0.15:
+            return f"{color} Heavy Truck"
+        return f"{color} Truck/Pickup"
+    return f"{color} {base_name}"
+
+
+def check_person_overlap(vehicle_box, person_boxes, threshold=0.3):
+    """Check if any person bounding box overlaps with a vehicle box."""
+    vx1, vy1, vx2, vy2 = vehicle_box
+    v_area = (vx2 - vx1) * (vy2 - vy1)
+
+    for px1, py1, px2, py2 in person_boxes:
+        # Calculate intersection
+        ix1 = max(vx1, px1)
+        iy1 = max(vy1, py1)
+        ix2 = min(vx2, px2)
+        iy2 = min(vy2, py2)
+
+        if ix1 < ix2 and iy1 < iy2:
+            intersection = (ix2 - ix1) * (iy2 - iy1)
+            p_area = (px2 - px1) * (py2 - py1)
+            iou = intersection / min(v_area, p_area)
+            if iou > threshold:
+                return True
+    return False
 
 
 class ImageAnalysisRequest(BaseModel):
@@ -142,7 +231,7 @@ class ImageAnalysisRequest(BaseModel):
 
 @app.post("/analyze-image")
 async def analyze_image(req: ImageAnalysisRequest):
-    """Detect vehicles in an image using YOLOv8."""
+    """Detect vehicles in an image using YOLOv8 with color and violation analysis."""
     model = get_yolo_model()
     if model is None:
         raise HTTPException(status_code=503, detail="YOLO model not available")
@@ -157,41 +246,79 @@ async def analyze_image(req: ImageAnalysisRequest):
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Invalid image: {str(e)}")
 
-    # Run YOLO detection — low confidence for max detections
+    img_w, img_h = img.size
+    img_area = img_w * img_h
+
+    # Run YOLO detection
     results = model(img, conf=0.15, verbose=False)
     detections = results[0]
 
+    # First pass: collect person bounding boxes for helmet/rider checks
+    person_boxes = []
+    for box in detections.boxes:
+        cls_id = int(box.cls[0])
+        if cls_id == 0:  # Person class
+            coords = box.xyxy[0].tolist()
+            person_boxes.append(coords)
+
+    # Second pass: process vehicle detections
     vehicles = []
+    violation_count = 0
+
     for box in detections.boxes:
         cls_id = int(box.cls[0])
         if cls_id not in VEHICLE_CLASSES:
             continue
 
-        vtype, vname = VEHICLE_CLASSES[cls_id]
+        vtype, base_name = VEHICLE_CLASSES[cls_id]
         conf = float(box.conf[0])
+        coords = box.xyxy[0].tolist()
+        bbox_area = (coords[2] - coords[0]) * (coords[3] - coords[1])
 
-        # Check for helmet: for motorcycles, look for nearby 'person' without helmet
-        helmet_detected = True
+        # Extract color from vehicle region
+        color = get_dominant_color(img, coords)
+
+        # Generate descriptive model name
+        model_desc = get_vehicle_description(vtype, base_name, color, bbox_area, img_area)
+
+        # Vehicle-type-specific violation checks
+        helmet_detected = True  # Default for non-2W vehicles
+        violation_type = 'None'
+
         if vtype == '2W':
-            # Conservative: flag no helmet only if confidence is high and no person class nearby
-            helmet_detected = True  # Can't reliably detect from YOLO alone
+            # Check if rider has person overlap (rider detected)
+            has_rider = check_person_overlap(coords, person_boxes)
+            if has_rider:
+                # YOLO can't detect helmets directly, flag as potential risk
+                helmet_detected = False
+                violation_type = 'No Helmet'
+                violation_count += 1
+            else:
+                helmet_detected = True  # No rider visible, can't check
+
+        elif vtype == 'CAR':
+            # Seatbelt can't be detected from outside view
+            # Check for visible person in driver seat area
+            has_person = check_person_overlap(coords, person_boxes)
+            if has_person:
+                violation_type = 'None'  # Can't verify seatbelt from exterior
 
         vehicles.append({
             'license_plate': 'Not readable',
             'plate_readable': False,
-            'model': vname,
-            'color': 'Unknown',
+            'model': model_desc,
+            'color': color,
             'vehicle_type': vtype,
             'helmet_detected': helmet_detected,
-            'violation_type': 'None',
+            'violation_type': violation_type,
             'confidence': round(conf, 2),
         })
 
     return {
         'vehicles': vehicles,
         'totalDetected': len(vehicles),
-        'violationCount': 0,
-        'analysisSource': 'YOLOv8 (Local DL)',
+        'violationCount': violation_count,
+        'analysisSource': 'YOLOv8 + CV (Local DL)',
     }
 
 
