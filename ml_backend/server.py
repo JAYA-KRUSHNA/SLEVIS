@@ -134,14 +134,28 @@ VEHICLE_CLASSES = {
     1: ('2W', 'Bicycle'),
 }
 
-# Violation severity levels
-VIOLATION_SEVERITY = {
-    'No Helmet': 'high',
-    'Triple Riding': 'high',
-    'No Seatbelt': 'medium',
-    'Overloading': 'medium',
-    'No License Plate': 'low',
-    'None': 'none',
+# ─── Comprehensive Indian MV Act Violation Database ───
+VIOLATION_DB = {
+    'No Helmet':        {'severity': 'high',     'fine': 1000,  'section': 'Section 129 MV Act',  'points': 3, 'description': 'Riding without protective headgear'},
+    'Triple Riding':    {'severity': 'high',     'fine': 1000,  'section': 'Section 128 MV Act',  'points': 3, 'description': 'More than 2 persons on a two-wheeler'},
+    'No Seatbelt':      {'severity': 'medium',   'fine': 1000,  'section': 'Section 194B MV Act', 'points': 2, 'description': 'Driving without seatbelt fastened'},
+    'Overloading':      {'severity': 'high',     'fine': 2000,  'section': 'Section 194 MV Act',  'points': 4, 'description': 'Vehicle exceeding passenger/cargo capacity'},
+    'No License Plate': {'severity': 'medium',   'fine': 5000,  'section': 'Section 192 MV Act',  'points': 2, 'description': 'Missing or obscured registration plate'},
+    'Using Phone':      {'severity': 'medium',   'fine': 5000,  'section': 'Section 184 MV Act',  'points': 2, 'description': 'Using mobile phone while driving'},
+    'Wrong Side':       {'severity': 'high',     'fine': 5000,  'section': 'Section 184 MV Act',  'points': 4, 'description': 'Driving on wrong side of the road'},
+    'Signal Jump':      {'severity': 'high',     'fine': 5000,  'section': 'Section 184 MV Act',  'points': 4, 'description': 'Disobeying traffic signal'},
+    'Reckless Driving': {'severity': 'critical', 'fine': 5000,  'section': 'Section 184 MV Act',  'points': 5, 'description': 'Driving in a rash or negligent manner'},
+    'Drunk Driving':    {'severity': 'critical', 'fine': 10000, 'section': 'Section 185 MV Act',  'points': 5, 'description': 'Driving under influence of alcohol/drugs'},
+    'None':             {'severity': 'none',     'fine': 0,     'section': '',                    'points': 0, 'description': 'No violation detected'},
+}
+
+# Severity weight for risk scoring
+SEVERITY_WEIGHTS = {
+    'critical': 1.0,
+    'high': 0.75,
+    'medium': 0.5,
+    'low': 0.25,
+    'none': 0.0,
 }
 
 
@@ -274,6 +288,151 @@ def check_person_overlap(vehicle_box, person_boxes, threshold=0.3):
     return count_persons_on_vehicle(vehicle_box, person_boxes, threshold) > 0
 
 
+def detect_number_plate_absence(img, bbox, img_area):
+    """Heuristic: check if the lower portion of vehicle has a plate-like high-contrast region."""
+    import numpy as np
+    x1, y1, x2, y2 = [int(c) for c in bbox]
+    w, h = x2 - x1, y2 - y1
+    if w < 20 or h < 20:
+        return False  # Too small to judge
+
+    # License plates are typically in the lower 30% of the vehicle
+    plate_region_y1 = y1 + int(h * 0.7)
+    plate_region = img.crop((x1, plate_region_y1, x2, y2))
+    plate_arr = np.array(plate_region.convert('L'))  # Grayscale
+
+    # Check for high contrast region (plates have strong edges)
+    if plate_arr.size == 0:
+        return False
+    contrast = plate_arr.std()
+    # Low contrast in plate region suggests no plate visible
+    size_ratio = (w * h) / max(img_area, 1)
+    # Only flag for vehicles large enough to see a plate
+    if size_ratio > 0.02 and contrast < 25:
+        return True  # Likely no plate visible
+    return False
+
+
+def check_helmet_spatial(vehicle_box, person_boxes, all_detections, coco_names):
+    """Enhanced helmet detection using spatial relationship between person heads and nearby objects.
+    YOLO sometimes detects helmets as 'sports ball' (class 32) or similar round objects.
+    If a person is on a bike and there's NO small round object above their head → likely no helmet.
+    """
+    vx1, vy1, vx2, vy2 = vehicle_box
+    helmet_indicators = []  # List of (person_box, has_helmet_indicator)
+
+    for px1, py1, px2, py2 in person_boxes:
+        # Check overlap with vehicle
+        ix1 = max(vx1, px1)
+        iy1 = max(vy1, py1)
+        ix2 = min(vx2, px2)
+        iy2 = min(vy2, py2)
+        if not (ix1 < ix2 and iy1 < iy2):
+            continue
+
+        p_area = (px2 - px1) * (py2 - py1)
+        overlap = ((ix2 - ix1) * (iy2 - iy1)) / max(p_area, 1)
+        if overlap < 0.2:
+            continue
+
+        # Person is on this vehicle — check for helmet-like objects above their head
+        head_region_y_top = py1 - (py2 - py1) * 0.3  # Above person's head
+        head_region_y_bottom = py1 + (py2 - py1) * 0.15  # Slight overlap with head
+        has_helmet = False
+
+        for det_box in all_detections.boxes:
+            det_cls = int(det_box.cls[0])
+            det_conf = float(det_box.conf[0])
+            # Classes that could indicate a helmet: sports ball (32), backpack (24-ish), or any small object near head
+            if det_cls in [32, 26, 27] and det_conf > 0.15:
+                dx1, dy1, dx2, dy2 = det_box.xyxy[0].tolist()
+                # Check if this object is near the person's head region
+                if dx1 > px1 - 20 and dx2 < px2 + 20 and dy1 > head_region_y_top and dy2 < head_region_y_bottom:
+                    has_helmet = True
+                    break
+
+        helmet_indicators.append(has_helmet)
+
+    return helmet_indicators
+
+
+def detect_wrong_side(vehicles_data):
+    """Heuristic: detect potential wrong-side driving by analyzing vehicle positions and directions.
+    If most vehicles are on one side of the image but one vehicle faces opposite, it may be wrong-side.
+    """
+    if len(vehicles_data) < 2:
+        return set()  # Need multiple vehicles to compare
+
+    wrong_side_indices = set()
+    # Analyze vehicle center x-positions and aspect ratios
+    centers = []
+    for i, v in enumerate(vehicles_data):
+        bbox = v['bbox']
+        cx = (bbox[0] + bbox[2]) / 2
+        cy = (bbox[1] + bbox[3]) / 2
+        w = bbox[2] - bbox[0]
+        h = bbox[3] - bbox[1]
+        centers.append({'idx': i, 'cx': cx, 'cy': cy, 'w': w, 'h': h, 'aspect': w / max(h, 1)})
+
+    # Group by vertical position (same lane = similar y)
+    # Check if any vehicle's aspect ratio suggests it faces the opposite direction
+    # Vehicles facing camera tend to be wider (front view), vehicles going away tend to be narrower
+    if len(centers) >= 3:
+        avg_cx = sum(c['cx'] for c in centers) / len(centers)
+        for c in centers:
+            # If a vehicle is on the opposite side of the average and isolated
+            deviation = abs(c['cx'] - avg_cx)
+            avg_deviation = sum(abs(cc['cx'] - avg_cx) for cc in centers) / len(centers)
+            if deviation > avg_deviation * 2.5 and deviation > 100:
+                wrong_side_indices.add(c['idx'])
+
+    return wrong_side_indices
+
+
+def build_violation_details(violations, detection_confidence=1.0):
+    """Build detailed violation info from the VIOLATION_DB."""
+    details = []
+    for v in violations:
+        info = VIOLATION_DB.get(v, VIOLATION_DB['None'])
+        details.append({
+            'type': v,
+            'severity': info['severity'],
+            'fine': info['fine'],
+            'legal_section': info['section'],
+            'penalty_points': info['points'],
+            'description': info['description'],
+            'confidence': round(min(1.0, detection_confidence), 2),
+        })
+    return details
+
+
+def calculate_risk_score(all_violations):
+    """Calculate an aggregate risk score (0-1) for the entire image based on all violations."""
+    if not all_violations:
+        return 0.0, 'none'
+
+    total_weight = 0
+    for v in all_violations:
+        info = VIOLATION_DB.get(v, VIOLATION_DB['None'])
+        total_weight += SEVERITY_WEIGHTS.get(info['severity'], 0)
+
+    # Normalize: max reasonable violations ~ 10
+    score = min(1.0, total_weight / 5.0)
+
+    if score >= 0.8:
+        level = 'critical'
+    elif score >= 0.6:
+        level = 'high'
+    elif score >= 0.35:
+        level = 'medium'
+    elif score > 0:
+        level = 'low'
+    else:
+        level = 'none'
+
+    return round(score, 3), level
+
+
 class ImageAnalysisRequest(BaseModel):
     imageData: str  # base64 or data URL
     mimeType: str = 'image/jpeg'
@@ -322,6 +481,7 @@ async def analyze_image(req: ImageAnalysisRequest):
     # Second pass: process vehicle detections
     vehicles = []
     violation_count = 0
+    all_violations_flat = []  # For aggregate risk scoring
 
     for box in detections.boxes:
         cls_id = int(box.cls[0])
@@ -351,16 +511,27 @@ async def analyze_image(req: ImageAnalysisRequest):
         # ── Person association — count riders/occupants ──
         rider_count = count_persons_on_vehicle(coords, person_boxes)
 
-        # ── Smart violation detection ──
+        # ── Enhanced smart violation detection ──
         helmet_detected = None    # None = not applicable
         seatbelt_detected = None  # None = not applicable
         violations = []           # Multiple violations per vehicle
 
         if vtype == '2W':
-            # Bikes: only flag helmet if a rider is detected on/near the bike
+            # Bikes: improved helmet detection with spatial analysis
             if rider_count > 0:
-                helmet_detected = False  # Can't verify helmet from YOLO alone
-                violations.append('No Helmet')
+                helmet_indicators = check_helmet_spatial(coords, person_boxes, detections, coco_names)
+                if helmet_indicators and any(h for h in helmet_indicators):
+                    # At least one rider has a helmet indicator
+                    helmet_detected = True
+                    # Check if SOME riders still don't have helmets (partial compliance)
+                    unhelmeted = sum(1 for h in helmet_indicators if not h)
+                    if unhelmeted > 0:
+                        helmet_detected = False
+                        violations.append('No Helmet')
+                else:
+                    # No helmet indicators found for any rider
+                    helmet_detected = False
+                    violations.append('No Helmet')
             else:
                 # No rider detected — parked bike or rider not visible
                 helmet_detected = None
@@ -371,13 +542,14 @@ async def analyze_image(req: ImageAnalysisRequest):
 
         elif vtype == 'CAR':
             # Cars: can't see seatbelt from exterior — mark as unverified
-            seatbelt_detected = None  # Honestly unverifiable
+            seatbelt_detected = None  # Honestly unverifiable from YOLO
             # No automatic violation — YOLO can't see inside cars
 
         elif vtype == 'BUS' or vtype == 'CV':
             # Heavy vehicles: check for overloading heuristic
-            # If many persons detected near a truck/bus, might be overloaded
             if rider_count > 5 and vtype == 'CV':
+                violations.append('Overloading')
+            if rider_count > 10 and vtype == 'BUS':
                 violations.append('Overloading')
 
         elif vtype == 'AUTO':
@@ -385,7 +557,25 @@ async def analyze_image(req: ImageAnalysisRequest):
             if rider_count > 4:
                 violations.append('Overloading')
 
+        # ── Number plate detection heuristic ──
+        try:
+            if detect_number_plate_absence(img, coords, img_area):
+                violations.append('No License Plate')
+        except Exception:
+            pass  # Don't let plate check crash the pipeline
+
+        # Build violation details with severity, fine, legal section
+        violation_details = build_violation_details(violations, conf)
+        total_fine = sum(d['fine'] for d in violation_details)
+        total_points = sum(d['penalty_points'] for d in violation_details)
+        max_severity = 'none'
+        severity_order = ['none', 'low', 'medium', 'high', 'critical']
+        for d in violation_details:
+            if severity_order.index(d['severity']) > severity_order.index(max_severity):
+                max_severity = d['severity']
+
         violation_count += len(violations)
+        all_violations_flat.extend(violations)
         violation_type = violations[0] if violations else 'None'
 
         vehicles.append({
@@ -398,15 +588,44 @@ async def analyze_image(req: ImageAnalysisRequest):
             'seatbelt_detected': seatbelt_detected,
             'violation_type': violation_type,
             'violations': violations,
+            'violation_details': violation_details,
+            'total_fine': total_fine,
+            'total_penalty_points': total_points,
+            'max_severity': max_severity,
             'rider_count': rider_count,
             'confidence': round(conf, 2),
             'bbox': [round(c, 1) for c in coords],
         })
 
+    # ── Wrong-side detection (requires multiple vehicles) ──
+    wrong_side_indices = detect_wrong_side(vehicles)
+    for idx in wrong_side_indices:
+        v = vehicles[idx]
+        if 'Wrong Side' not in v['violations']:
+            v['violations'].append('Wrong Side')
+            new_detail = build_violation_details(['Wrong Side'], v['confidence'])
+            v['violation_details'].extend(new_detail)
+            v['total_fine'] += new_detail[0]['fine']
+            v['total_penalty_points'] += new_detail[0]['penalty_points']
+            severity_order = ['none', 'low', 'medium', 'high', 'critical']
+            if severity_order.index(new_detail[0]['severity']) > severity_order.index(v['max_severity']):
+                v['max_severity'] = new_detail[0]['severity']
+            if v['violation_type'] == 'None':
+                v['violation_type'] = 'Wrong Side'
+            violation_count += 1
+            all_violations_flat.append('Wrong Side')
+
+    # ── Aggregate risk score for entire image ──
+    risk_score, risk_level = calculate_risk_score(all_violations_flat)
+    total_estimated_fine = sum(v.get('total_fine', 0) for v in vehicles)
+
     return {
         'vehicles': vehicles,
         'totalDetected': len(vehicles),
         'violationCount': violation_count,
+        'riskScore': risk_score,
+        'riskLevel': risk_level,
+        'totalEstimatedFine': total_estimated_fine,
         'analysisSource': 'YOLOv8 + CV (Local DL)',
         'analysisMode': 'yolo',
     }
@@ -416,21 +635,26 @@ async def analyze_image(req: ImageAnalysisRequest):
 # ─── Hybrid YOLO + Gemini Endpoint ───
 @app.post("/analyze-hybrid")
 async def analyze_hybrid(req: ImageAnalysisRequest):
-    """Run YOLO for object detection, then optionally enhance with Gemini context."""
+    """Run YOLO for object detection, then enhance with Gemini context for violation confirmation."""
     # Step 1: Run YOLO detection
     yolo_result = await analyze_image(req)
 
-    # Step 2: Build a context summary for Gemini from YOLO detections
+    # Step 2: Build a detailed context summary from YOLO detections
     vehicles = yolo_result.get('vehicles', [])
     if not vehicles:
         return yolo_result
 
     context_lines = []
     for i, v in enumerate(vehicles):
+        violations_str = ', '.join(v.get('violations', [])) or 'None'
+        details = v.get('violation_details', [])
+        fine = sum(d.get('fine', 0) for d in details)
+        severity = v.get('max_severity', 'none')
         context_lines.append(
             f"Vehicle {i+1}: {v['vehicle_type']} ({v['model']}), "
             f"color={v['color']}, riders={v.get('rider_count', 0)}, "
-            f"violations={v.get('violations', [])}"
+            f"violations=[{violations_str}], severity={severity}, "
+            f"fine=₹{fine}, confidence={v.get('confidence', 0)}"
         )
 
     yolo_result['analysisMode'] = 'hybrid'

@@ -266,7 +266,7 @@ export default function AdvancedCharts() {
 
     return (
         <motion.div
-            className="max-w-5xl mx-auto"
+            className="w-full"
             variants={containerVariants}
             initial="hidden"
             animate="visible"

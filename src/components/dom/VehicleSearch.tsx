@@ -273,7 +273,7 @@ export default function VehicleSearch() {
 
     return (
         <motion.div
-            className="max-w-4xl mx-auto"
+            className="w-full"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
         >

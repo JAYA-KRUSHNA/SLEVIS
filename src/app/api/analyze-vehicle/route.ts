@@ -1,6 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { callGeminiVision } from '@/lib/gemini';
 
+interface ViolationDetail {
+    type: string;
+    severity: string;
+    fine: number;
+    legal_section: string;
+    penalty_points: number;
+    description: string;
+    confidence: number;
+}
+
 interface DetectedVehicle {
     license_plate: string;
     plate_readable: boolean;
@@ -11,6 +21,10 @@ interface DetectedVehicle {
     seatbelt_detected: boolean | null;
     violation_type: string;
     violations: string[];
+    violation_details: ViolationDetail[];
+    total_fine: number;
+    total_penalty_points: number;
+    max_severity: string;
     rider_count: number;
     confidence: number;
     bbox?: number[];
@@ -74,16 +88,23 @@ export async function POST(request: NextRequest) {
 
         if (yoloResponse.ok) {
             const yoloData = await yoloResponse.json();
-            // Ensure YOLO results have the violations array
+            // Ensure YOLO results have the violations array and new detail fields
             const vehicles = (yoloData.vehicles || []).map((v: any) => ({
                 ...v,
                 violations: v.violations || (v.violation_type && v.violation_type !== 'None' ? [v.violation_type] : []),
+                violation_details: v.violation_details || [],
+                total_fine: v.total_fine ?? 0,
+                total_penalty_points: v.total_penalty_points ?? 0,
+                max_severity: v.max_severity || 'none',
                 rider_count: v.rider_count ?? 0,
                 seatbelt_detected: v.seatbelt_detected ?? null,
             }));
             return NextResponse.json({
                 ...yoloData,
                 vehicles,
+                riskScore: yoloData.riskScore ?? 0,
+                riskLevel: yoloData.riskLevel || 'none',
+                totalEstimatedFine: yoloData.totalEstimatedFine ?? 0,
                 analysisSource: 'YOLOv8 + Deep Vision (Local DL)',
                 analysisMode: 'yolo',
             });
@@ -104,9 +125,53 @@ export async function POST(request: NextRequest) {
 
         const parsed: { vehicles: DetectedVehicle[] } = JSON.parse(jsonStr);
 
+        // Indian MV Act violation database for Gemini fallback
+        const VIOLATION_FINES: Record<string, { severity: string; fine: number; section: string; points: number; description: string }> = {
+            'No Helmet': { severity: 'high', fine: 1000, section: 'Section 129 MV Act', points: 3, description: 'Riding without protective headgear' },
+            'Triple Riding': { severity: 'high', fine: 1000, section: 'Section 128 MV Act', points: 3, description: 'More than 2 persons on a two-wheeler' },
+            'No Seatbelt': { severity: 'medium', fine: 1000, section: 'Section 194B MV Act', points: 2, description: 'Driving without seatbelt fastened' },
+            'Overloading': { severity: 'high', fine: 2000, section: 'Section 194 MV Act', points: 4, description: 'Vehicle exceeding passenger/cargo capacity' },
+            'No License Plate': { severity: 'medium', fine: 5000, section: 'Section 192 MV Act', points: 2, description: 'Missing or obscured registration plate' },
+            'Using Phone': { severity: 'medium', fine: 5000, section: 'Section 184 MV Act', points: 2, description: 'Using mobile phone while driving' },
+            'Wrong Side': { severity: 'high', fine: 5000, section: 'Section 184 MV Act', points: 4, description: 'Driving on wrong side of the road' },
+            'Signal Jump': { severity: 'high', fine: 5000, section: 'Section 184 MV Act', points: 4, description: 'Disobeying traffic signal' },
+            'Reckless Driving': { severity: 'critical', fine: 5000, section: 'Section 184 MV Act', points: 5, description: 'Driving in a rash or negligent manner' },
+        };
+
+        const sevWeights: Record<string, number> = { critical: 1.0, high: 0.75, medium: 0.5, low: 0.25, none: 0 };
+        let allViolationsFlat: string[] = [];
+        let totalEstimatedFine = 0;
+
         const vehicles = (parsed.vehicles || []).map((v: any) => {
             const violations: string[] = Array.isArray(v.violations) ? v.violations :
                 (v.violation_type && v.violation_type !== 'None' ? [v.violation_type] : []);
+
+            // Build violation_details for Gemini results
+            const violation_details: ViolationDetail[] = violations.map((viol: string) => {
+                const info = VIOLATION_FINES[viol] || { severity: 'medium', fine: 1000, section: 'MV Act', points: 1, description: viol };
+                return {
+                    type: viol,
+                    severity: info.severity,
+                    fine: info.fine,
+                    legal_section: info.section,
+                    penalty_points: info.points,
+                    description: info.description,
+                    confidence: Math.min(1, Math.max(0, v.confidence || 0.5)),
+                };
+            });
+
+            const total_fine = violation_details.reduce((s: number, d: ViolationDetail) => s + d.fine, 0);
+            const total_penalty_points = violation_details.reduce((s: number, d: ViolationDetail) => s + d.penalty_points, 0);
+            const sevOrder = ['none', 'low', 'medium', 'high', 'critical'];
+            let max_severity = 'none';
+            for (const d of violation_details) {
+                if (sevOrder.indexOf(d.severity) > sevOrder.indexOf(max_severity)) {
+                    max_severity = d.severity;
+                }
+            }
+
+            allViolationsFlat.push(...violations);
+            totalEstimatedFine += total_fine;
 
             return {
                 license_plate: v.license_plate || 'Not readable',
@@ -118,15 +183,31 @@ export async function POST(request: NextRequest) {
                 seatbelt_detected: v.seatbelt_detected ?? null,
                 violation_type: v.violation_type || (violations.length > 0 ? violations[0] : 'None'),
                 violations,
+                violation_details,
+                total_fine,
+                total_penalty_points,
+                max_severity,
                 rider_count: v.rider_count ?? 0,
                 confidence: Math.min(1, Math.max(0, v.confidence || 0.5)),
             };
         });
 
+        // Calculate aggregate risk score
+        let totalWeight = 0;
+        for (const v of allViolationsFlat) {
+            const info = VIOLATION_FINES[v];
+            totalWeight += sevWeights[info?.severity || 'medium'] || 0.5;
+        }
+        const riskScore = Math.min(1, totalWeight / 5);
+        const riskLevel = riskScore >= 0.8 ? 'critical' : riskScore >= 0.6 ? 'high' : riskScore >= 0.35 ? 'medium' : riskScore > 0 ? 'low' : 'none';
+
         return NextResponse.json({
             vehicles,
             totalDetected: vehicles.length,
             violationCount: vehicles.filter((v: DetectedVehicle) => v.violations.length > 0).length,
+            riskScore: Math.round(riskScore * 1000) / 1000,
+            riskLevel,
+            totalEstimatedFine,
             analysisSource: 'Gemini Vision AI',
             analysisMode: 'gemini',
             warning: 'YOLO backend not running — using Gemini Vision. Start the ML backend for best results: cd ml_backend && python server.py',
@@ -147,11 +228,18 @@ export async function POST(request: NextRequest) {
             seatbelt_detected: null,
             violation_type: 'None',
             violations: [],
+            violation_details: [],
+            total_fine: 0,
+            total_penalty_points: 0,
+            max_severity: 'none',
             rider_count: 0,
             confidence: 0.3,
         }],
         totalDetected: 1,
         violationCount: 0,
+        riskScore: 0,
+        riskLevel: 'none',
+        totalEstimatedFine: 0,
         analysisSource: 'Fallback',
         analysisMode: 'fallback',
         warning: 'Both YOLO and Gemini unavailable. Start the Python backend: cd ml_backend && python server.py',

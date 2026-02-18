@@ -94,7 +94,7 @@ export default function ExportPanel() {
 
     return (
         <motion.div
-            className="max-w-3xl mx-auto space-y-6"
+            className="w-full space-y-6"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
         >

@@ -11,47 +11,80 @@ import AdvancedCharts from './AdvancedCharts';
 import VehicleSearch from './VehicleSearch';
 import ExportPanel from './ExportPanel';
 
-// Animated Background Particles
+// Animated Background Particles with varying sizes, colors, blur
 function ParticleBackground() {
+    const particleConfig = [
+        { color: 'bg-cyan-500/25', size: 'w-1 h-1', blur: '' },
+        { color: 'bg-cyan-400/20', size: 'w-1.5 h-1.5', blur: 'blur-[1px]' },
+        { color: 'bg-purple-500/20', size: 'w-1 h-1', blur: '' },
+        { color: 'bg-blue-400/15', size: 'w-2 h-2', blur: 'blur-[2px]' },
+        { color: 'bg-pink-500/15', size: 'w-1 h-1', blur: '' },
+        { color: 'bg-cyan-300/30', size: 'w-0.5 h-0.5', blur: '' },
+    ];
     return (
         <div className="fixed inset-0 overflow-hidden pointer-events-none">
-            {[...Array(20)].map((_, i) => (
-                <motion.div
-                    key={i}
-                    className="absolute w-1 h-1 bg-cyan-500/30 rounded-full"
-                    initial={{
-                        x: Math.random() * window.innerWidth,
-                        y: Math.random() * window.innerHeight,
-                    }}
-                    animate={{
-                        x: Math.random() * window.innerWidth,
-                        y: Math.random() * window.innerHeight,
-                    }}
-                    transition={{
-                        duration: 10 + Math.random() * 10,
-                        repeat: Infinity,
-                        repeatType: 'reverse',
-                        ease: 'linear',
-                    }}
-                />
-            ))}
+            {[...Array(30)].map((_, i) => {
+                const cfg = particleConfig[i % particleConfig.length];
+                return (
+                    <motion.div
+                        key={i}
+                        className={`absolute ${cfg.size} ${cfg.color} rounded-full ${cfg.blur}`}
+                        initial={{
+                            x: Math.random() * window.innerWidth,
+                            y: Math.random() * window.innerHeight,
+                            opacity: 0.3 + Math.random() * 0.5,
+                        }}
+                        animate={{
+                            x: Math.random() * window.innerWidth,
+                            y: Math.random() * window.innerHeight,
+                            opacity: [0.3 + Math.random() * 0.5, 0.6 + Math.random() * 0.4, 0.3 + Math.random() * 0.5],
+                        }}
+                        transition={{
+                            duration: 8 + Math.random() * 14,
+                            repeat: Infinity,
+                            repeatType: 'reverse',
+                            ease: 'linear',
+                        }}
+                    />
+                );
+            })}
+            {/* Floating gradient orbs */}
+            <motion.div
+                className="absolute w-[500px] h-[500px] rounded-full bg-cyan-500/[0.03] blur-[100px]"
+                animate={{ x: ['-10%', '60%', '-10%'], y: ['10%', '70%', '10%'] }}
+                transition={{ duration: 25, repeat: Infinity, ease: 'easeInOut' }}
+            />
+            <motion.div
+                className="absolute w-[400px] h-[400px] rounded-full bg-purple-500/[0.03] blur-[100px]"
+                animate={{ x: ['70%', '20%', '70%'], y: ['60%', '10%', '60%'] }}
+                transition={{ duration: 30, repeat: Infinity, ease: 'easeInOut' }}
+            />
         </div>
     );
 }
 
-// Animated Grid Background
+// Animated Grid Background with subtle breathing effect
 function GridBackground() {
     return (
-        <div
-            className="fixed inset-0 pointer-events-none opacity-5"
-            style={{
-                backgroundImage: `
-                    linear-gradient(rgba(0, 240, 255, 0.3) 1px, transparent 1px),
-                    linear-gradient(90deg, rgba(0, 240, 255, 0.3) 1px, transparent 1px)
-                `,
-                backgroundSize: '50px 50px',
-            }}
-        />
+        <>
+            <div
+                className="fixed inset-0 pointer-events-none opacity-[0.04]"
+                style={{
+                    backgroundImage: `
+                        linear-gradient(rgba(0, 240, 255, 0.4) 1px, transparent 1px),
+                        linear-gradient(90deg, rgba(0, 240, 255, 0.4) 1px, transparent 1px)
+                    `,
+                    backgroundSize: '50px 50px',
+                }}
+            />
+            {/* Radial vignette overlay */}
+            <div
+                className="fixed inset-0 pointer-events-none"
+                style={{
+                    background: 'radial-gradient(ellipse at center, transparent 40%, rgba(5, 5, 10, 0.8) 100%)',
+                }}
+            />
+        </>
     );
 }
 
@@ -154,49 +187,67 @@ const IconUsers = () => (
     </svg>
 );
 
-// Glass Card Component
+// Glass Card Component — enhanced with inner glow, richer borders, hover lift
 const GlassCard = ({ children, className = '', delay = 0, glow = 'cyan' }: { children: React.ReactNode; className?: string; delay?: number; glow?: 'cyan' | 'pink' | 'purple' }) => {
     const glowColors = {
-        cyan: 'shadow-cyan-500/10 hover:shadow-cyan-500/20 border-cyan-500/20 hover:border-cyan-500/40',
-        pink: 'shadow-pink-500/10 hover:shadow-pink-500/20 border-pink-500/20 hover:border-pink-500/40',
-        purple: 'shadow-purple-500/10 hover:shadow-purple-500/20 border-purple-500/20 hover:border-purple-500/40',
+        cyan: 'shadow-cyan-500/10 hover:shadow-cyan-500/25 border-cyan-500/20 hover:border-cyan-500/40',
+        pink: 'shadow-pink-500/10 hover:shadow-pink-500/25 border-pink-500/20 hover:border-pink-500/40',
+        purple: 'shadow-purple-500/10 hover:shadow-purple-500/25 border-purple-500/20 hover:border-purple-500/40',
+    };
+    const innerGlow = {
+        cyan: 'from-cyan-500/[0.07] via-transparent to-transparent',
+        pink: 'from-pink-500/[0.07] via-transparent to-transparent',
+        purple: 'from-purple-500/[0.07] via-transparent to-transparent',
     };
 
     return (
         <motion.div
-            initial={{ opacity: 0, y: 20, scale: 0.95 }}
+            initial={{ opacity: 0, y: 20, scale: 0.96 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
-            transition={{ duration: 0.4, delay, ease: 'easeOut' }}
+            transition={{ duration: 0.45, delay, ease: 'easeOut' }}
             className={`
-                backdrop-blur-xl bg-gray-900/40 rounded-2xl border shadow-2xl
-                transition-all duration-300 ${glowColors[glow]} ${className}
+                relative backdrop-blur-xl bg-gray-900/50 rounded-2xl border shadow-2xl
+                transition-all duration-300 hover:-translate-y-0.5 ${glowColors[glow]} ${className}
             `}
         >
-            {children}
+            {/* Inner top glow accent */}
+            <div className={`absolute inset-x-0 top-0 h-px bg-gradient-to-r ${innerGlow[glow]} rounded-t-2xl`} />
+            <div className={`absolute inset-0 rounded-2xl bg-gradient-to-b ${innerGlow[glow]} pointer-events-none opacity-50`} />
+            <div className="relative z-10">{children}</div>
         </motion.div>
     );
 };
 
-// Stat Card with Animation
+// Stat Card with Animation — enhanced with gradient accent, pulse icon ring
 const StatCard = ({ label, value, change, icon, delay = 0 }: { label: string; value: string; change: string; icon: React.ReactNode; delay?: number }) => (
-    <GlassCard delay={delay} className="p-5">
+    <GlassCard delay={delay} className="p-5 group overflow-hidden">
+        {/* Gradient accent line at top */}
+        <div className="absolute inset-x-0 top-0 h-[2px] bg-gradient-to-r from-cyan-500/0 via-cyan-500/60 to-cyan-500/0 opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
         <div className="flex items-start justify-between">
             <div>
-                <p className="text-gray-500 text-xs uppercase tracking-wider mb-2">{label}</p>
+                <p className="text-gray-500 text-[10px] uppercase tracking-widest mb-2.5 font-semibold">{label}</p>
                 <motion.p
-                    className="font-orbitron text-3xl font-bold text-white"
+                    className="font-orbitron text-3xl font-bold text-white drop-shadow-[0_0_10px_rgba(0,240,255,0.15)]"
                     initial={{ opacity: 0, scale: 0.5 }}
                     animate={{ opacity: 1, scale: 1 }}
                     transition={{ duration: 0.5, delay: delay + 0.2 }}
                 >
                     {value}
                 </motion.p>
-                <p className={`text-sm mt-1 ${change.startsWith('+') ? 'text-emerald-400' : 'text-rose-400'}`}>
+                <div className={`flex items-center gap-1.5 mt-2 text-sm ${change.startsWith('+') ? 'text-emerald-400' : 'text-rose-400'}`}>
+                    <span className={`inline-block w-0 h-0 border-l-[4px] border-r-[4px] border-transparent ${change.startsWith('+') ? 'border-b-[6px] border-b-emerald-400' : 'border-t-[6px] border-t-rose-400'}`} />
                     {change} this week
-                </p>
+                </div>
             </div>
-            <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-cyan-500/20 to-purple-500/20 flex items-center justify-center text-cyan-400">
-                {icon}
+            <div className="relative">
+                <motion.div
+                    className="absolute -inset-1 rounded-xl bg-cyan-500/10 blur-md"
+                    animate={{ opacity: [0.3, 0.7, 0.3] }}
+                    transition={{ duration: 3, repeat: Infinity, ease: 'easeInOut' }}
+                />
+                <div className="relative w-12 h-12 rounded-xl bg-gradient-to-br from-cyan-500/20 to-purple-500/20 flex items-center justify-center text-cyan-400 border border-cyan-500/10">
+                    {icon}
+                </div>
             </div>
         </div>
     </GlassCard>
@@ -218,6 +269,18 @@ function VehicleAnalysis() {
         seatbelt_detected?: boolean | null;
         violation_type?: string;
         violations?: string[];
+        violation_details?: Array<{
+            type: string;
+            severity: string;
+            fine: number;
+            legal_section: string;
+            penalty_points: number;
+            description: string;
+            confidence: number;
+        }>;
+        total_fine?: number;
+        total_penalty_points?: number;
+        max_severity?: string;
         rider_count?: number;
         confidence?: number;
         bbox?: number[];
@@ -225,6 +288,9 @@ function VehicleAnalysis() {
     const [error, setError] = useState('');
     const [progress, setProgress] = useState(0);
     const [analysisMode, setAnalysisMode] = useState<string>('');
+    const [riskData, setRiskData] = useState<{ riskScore: number; riskLevel: string; totalEstimatedFine: number }>(
+        { riskScore: 0, riskLevel: 'none', totalEstimatedFine: 0 }
+    );
 
     const handleDrop = useCallback((e: React.DragEvent) => {
         e.preventDefault();
@@ -289,6 +355,11 @@ function VehicleAnalysis() {
 
             setResults(data.vehicles || []);
             setAnalysisMode(data.analysisMode || 'unknown');
+            setRiskData({
+                riskScore: data.riskScore ?? 0,
+                riskLevel: data.riskLevel || 'none',
+                totalEstimatedFine: data.totalEstimatedFine ?? 0,
+            });
         } catch (err: any) {
             clearInterval(progressInterval);
             setError(err.message || 'Network error');
@@ -303,6 +374,7 @@ function VehicleAnalysis() {
         setResults([]);
         setError('');
         setProgress(0);
+        setRiskData({ riskScore: 0, riskLevel: 'none', totalEstimatedFine: 0 });
     };
 
     const violationCount = results.filter(r => (r.violations?.length ?? 0) > 0 || (r.violation_type && r.violation_type !== 'None')).length;
@@ -334,20 +406,48 @@ function VehicleAnalysis() {
         'No License Plate': 'bg-gray-500/20 text-gray-400',
     };
 
+    const SEVERITY_BADGE: Record<string, { color: string; icon: string }> = {
+        critical: { color: 'bg-red-500/30 text-red-300 border-red-500/40', icon: '🔴' },
+        high: { color: 'bg-orange-500/25 text-orange-300 border-orange-500/40', icon: '🟠' },
+        medium: { color: 'bg-yellow-500/20 text-yellow-300 border-yellow-500/40', icon: '🟡' },
+        low: { color: 'bg-blue-500/15 text-blue-300 border-blue-500/30', icon: '🔵' },
+        none: { color: 'bg-gray-500/15 text-gray-400 border-gray-500/30', icon: '⚪' },
+    };
+
+    const RISK_GRADIENT = {
+        none: 'from-gray-500 to-gray-600',
+        low: 'from-emerald-500 to-green-400',
+        medium: 'from-yellow-500 to-amber-400',
+        high: 'from-orange-500 to-red-400',
+        critical: 'from-red-500 to-rose-600',
+    };
+
     return (
         <div className="h-full flex flex-col">
             {/* Header */}
             <div className="flex items-center justify-between mb-6">
-                <div>
-                    <h2 className="font-orbitron text-2xl font-bold bg-gradient-to-r from-cyan-400 to-blue-500 bg-clip-text text-transparent">
-                        Vehicle Detection
-                    </h2>
-                    <p className="text-gray-500 text-sm mt-1">AI-powered multi-vehicle analysis</p>
+                <div className="flex items-center gap-4">
+                    <motion.div
+                        className="w-14 h-14 rounded-2xl bg-gradient-to-br from-cyan-500/20 to-blue-500/20 flex items-center justify-center border border-cyan-500/20"
+                        animate={{ boxShadow: ['0 0 15px rgba(0,240,255,0.1)', '0 0 25px rgba(0,240,255,0.2)', '0 0 15px rgba(0,240,255,0.1)'] }}
+                        transition={{ duration: 3, repeat: Infinity }}
+                    >
+                        <span className="text-2xl">🔍</span>
+                    </motion.div>
+                    <div>
+                        <h2 className="font-orbitron text-2xl font-bold bg-gradient-to-r from-cyan-400 via-blue-400 to-purple-500 bg-clip-text text-transparent">
+                            Vehicle Detection
+                        </h2>
+                        <p className="text-gray-500 text-sm mt-0.5 flex items-center gap-2">
+                            <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-pulse" />
+                            AI-powered multi-vehicle analysis
+                        </p>
+                    </div>
                 </div>
                 {results.length > 0 && (
                     <motion.button
                         onClick={resetAnalysis}
-                        className="px-4 py-2 rounded-lg bg-gray-800/50 text-cyan-400 hover:bg-gray-700/50 transition-all text-sm"
+                        className="px-4 py-2 rounded-lg bg-gray-800/50 text-cyan-400 hover:bg-gray-700/50 border border-gray-700/50 hover:border-cyan-500/30 transition-all text-sm"
                         whileHover={{ scale: 1.05 }}
                         whileTap={{ scale: 0.95 }}
                     >
@@ -395,7 +495,10 @@ function VehicleAnalysis() {
                     animate={{ opacity: 1, y: 0 }}
                     className="mb-6"
                 >
-                    <label className="block text-sm text-gray-400 mb-3">Enter image URL from the internet</label>
+                    <label className="block text-sm text-gray-400 mb-3 flex items-center gap-2">
+                        <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-pulse" />
+                        Enter image URL from the internet
+                    </label>
                     <div className="flex gap-3">
                         <input
                             type="url"
@@ -403,12 +506,12 @@ function VehicleAnalysis() {
                             onChange={(e) => setImageUrl(e.target.value)}
                             onKeyDown={(e) => e.key === 'Enter' && loadImageFromUrl()}
                             placeholder="https://example.com/traffic.jpg"
-                            className="flex-1 px-4 py-3 bg-gray-900/50 border border-gray-700 rounded-xl text-white placeholder-gray-500 focus:border-cyan-500 focus:outline-none transition-all"
+                            className="flex-1 px-4 py-3.5 bg-gray-900/60 border border-gray-700/60 rounded-xl text-white placeholder-gray-600 focus:border-cyan-500 focus:shadow-[0_0_15px_rgba(0,240,255,0.1)] focus:outline-none transition-all"
                         />
                         <motion.button
                             onClick={loadImageFromUrl}
-                            className="px-6 py-3 bg-gradient-to-r from-cyan-500 to-blue-500 rounded-xl font-semibold text-white"
-                            whileHover={{ scale: 1.02, boxShadow: '0 0 20px rgba(0, 240, 255, 0.3)' }}
+                            className="px-7 py-3.5 bg-gradient-to-r from-cyan-500 to-blue-500 rounded-xl font-semibold text-white shadow-lg shadow-cyan-500/20"
+                            whileHover={{ scale: 1.02, boxShadow: '0 0 25px rgba(0, 240, 255, 0.35)' }}
                             whileTap={{ scale: 0.98 }}
                         >
                             Load
@@ -425,18 +528,28 @@ function VehicleAnalysis() {
                     onDrop={handleDrop}
                     onDragOver={(e) => e.preventDefault()}
                     onClick={() => document.getElementById('file-input')?.click()}
-                    className="flex-1 border-2 border-dashed border-gray-700 hover:border-cyan-500/50 rounded-2xl p-12 text-center transition-all cursor-pointer bg-gray-900/20 hover:bg-gray-900/40 group"
+                    className="flex-1 relative border-2 border-dashed border-gray-700/60 hover:border-cyan-500/50 rounded-2xl p-12 text-center transition-all duration-500 cursor-pointer bg-gray-900/20 hover:bg-gradient-to-b hover:from-cyan-500/[0.03] hover:to-transparent group overflow-hidden"
                 >
+                    {/* Animated corner accents */}
+                    <div className="absolute top-2 left-2 w-6 h-6 border-t-2 border-l-2 border-cyan-500/0 group-hover:border-cyan-500/50 rounded-tl-lg transition-all duration-500" />
+                    <div className="absolute top-2 right-2 w-6 h-6 border-t-2 border-r-2 border-cyan-500/0 group-hover:border-cyan-500/50 rounded-tr-lg transition-all duration-500" />
+                    <div className="absolute bottom-2 left-2 w-6 h-6 border-b-2 border-l-2 border-cyan-500/0 group-hover:border-cyan-500/50 rounded-bl-lg transition-all duration-500" />
+                    <div className="absolute bottom-2 right-2 w-6 h-6 border-b-2 border-r-2 border-cyan-500/0 group-hover:border-cyan-500/50 rounded-br-lg transition-all duration-500" />
                     <input type="file" id="file-input" className="hidden" accept="image/*" onChange={handleFileSelect} />
                     <motion.div
-                        className="text-gray-600 group-hover:text-cyan-400 mx-auto w-fit mb-6 transition-colors"
-                        animate={{ y: [0, -5, 0] }}
-                        transition={{ duration: 2, repeat: Infinity }}
+                        className="text-gray-600 group-hover:text-cyan-400 mx-auto w-fit mb-6 transition-colors duration-300"
+                        animate={{ y: [0, -8, 0] }}
+                        transition={{ duration: 2.5, repeat: Infinity, ease: 'easeInOut' }}
                     >
                         <IconUpload />
                     </motion.div>
-                    <p className="text-gray-400 mb-2 text-lg">Drop image here or click to upload</p>
+                    <p className="text-gray-300 mb-2 text-lg font-medium">Drop image here or click to upload</p>
                     <p className="text-gray-600 text-sm">AI will detect ALL vehicles in the image</p>
+                    <div className="flex items-center justify-center gap-4 mt-6">
+                        <span className="text-[10px] text-gray-600 uppercase tracking-wider px-3 py-1 rounded-full border border-gray-800">JPG</span>
+                        <span className="text-[10px] text-gray-600 uppercase tracking-wider px-3 py-1 rounded-full border border-gray-800">PNG</span>
+                        <span className="text-[10px] text-gray-600 uppercase tracking-wider px-3 py-1 rounded-full border border-gray-800">WEBP</span>
+                    </div>
                 </motion.div>
             )}
 
@@ -539,6 +652,55 @@ function VehicleAnalysis() {
                                         </motion.span>
                                     )}
                                 </div>
+
+                                {/* ── Risk Score Meter + Total Fine ── */}
+                                {(riskData.riskScore > 0 || riskData.totalEstimatedFine > 0) && (
+                                    <motion.div
+                                        className="mt-4 pt-4 border-t border-gray-700/50"
+                                        initial={{ opacity: 0, y: 10 }}
+                                        animate={{ opacity: 1, y: 0 }}
+                                        transition={{ delay: 0.4 }}
+                                    >
+                                        <div className="flex items-center justify-between gap-4">
+                                            {/* Risk Meter */}
+                                            <div className="flex-1">
+                                                <div className="flex items-center justify-between mb-2">
+                                                    <span className="text-xs text-gray-400 uppercase tracking-wider">Risk Score</span>
+                                                    <span className={`text-xs font-semibold px-2 py-0.5 rounded-full border ${SEVERITY_BADGE[riskData.riskLevel]?.color || SEVERITY_BADGE.none.color
+                                                        }`}>
+                                                        {SEVERITY_BADGE[riskData.riskLevel]?.icon || '⚪'} {riskData.riskLevel.toUpperCase()}
+                                                    </span>
+                                                </div>
+                                                <div className="w-full h-2.5 bg-gray-800 rounded-full overflow-hidden">
+                                                    <motion.div
+                                                        className={`h-full rounded-full bg-gradient-to-r ${RISK_GRADIENT[riskData.riskLevel as keyof typeof RISK_GRADIENT] || RISK_GRADIENT.none
+                                                            }`}
+                                                        initial={{ width: '0%' }}
+                                                        animate={{ width: `${Math.round(riskData.riskScore * 100)}%` }}
+                                                        transition={{ duration: 1, delay: 0.5, ease: 'easeOut' }}
+                                                    />
+                                                </div>
+                                                <p className="text-[10px] text-gray-600 mt-1">{Math.round(riskData.riskScore * 100)}% threat level</p>
+                                            </div>
+
+                                            <div className="w-px h-12 bg-gray-700" />
+
+                                            {/* Total Fine */}
+                                            <div className="text-center min-w-[100px]">
+                                                <p className="text-xs text-gray-400 uppercase tracking-wider mb-1">Est. Fine</p>
+                                                <motion.p
+                                                    className="font-orbitron text-2xl font-bold text-amber-400"
+                                                    initial={{ scale: 0 }}
+                                                    animate={{ scale: 1 }}
+                                                    transition={{ type: 'spring', delay: 0.5 }}
+                                                >
+                                                    ₹{riskData.totalEstimatedFine.toLocaleString('en-IN')}
+                                                </motion.p>
+                                                <p className="text-[10px] text-gray-600 mt-0.5">Indian MV Act</p>
+                                            </div>
+                                        </div>
+                                    </motion.div>
+                                )}
                             </GlassCard>
 
                             {/* AI Source Badge — Dynamic */}
@@ -604,14 +766,37 @@ function VehicleAnalysis() {
                                                     </div>
                                                 </div>
                                                 <div className="text-right space-y-1.5 flex flex-col items-end">
-                                                    {/* Multiple violation badges */}
-                                                    {violations.map((v, vi) => (
-                                                        <span key={vi} className={`inline-block px-3 py-1 rounded-lg text-sm font-medium ${VIOLATION_COLORS[v] || 'bg-rose-500/20 text-rose-400'}`}>
-                                                            ⚠ {v}
-                                                        </span>
-                                                    ))}
+                                                    {/* Multiple violation badges with severity + fine */}
+                                                    {(result.violation_details && result.violation_details.length > 0
+                                                        ? result.violation_details
+                                                        : violations.map(v => ({ type: v, severity: 'medium', fine: 0, legal_section: '', penalty_points: 0, description: v, confidence: 0 }))
+                                                    ).map((detail, vi) => {
+                                                        const sev = SEVERITY_BADGE[detail.severity] || SEVERITY_BADGE.none;
+                                                        return (
+                                                            <div key={vi} className="flex flex-col items-end gap-0.5">
+                                                                <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-sm font-medium border ${sev.color}`}>
+                                                                    {sev.icon} {detail.type}
+                                                                    {detail.fine > 0 && (
+                                                                        <span className="text-[10px] ml-1 opacity-80">₹{detail.fine.toLocaleString('en-IN')}</span>
+                                                                    )}
+                                                                </span>
+                                                                {detail.legal_section && (
+                                                                    <span className="text-[9px] text-gray-600 px-1">{detail.legal_section}</span>
+                                                                )}
+                                                            </div>
+                                                        );
+                                                    })}
+                                                    {/* Total fine per vehicle */}
+                                                    {(result.total_fine ?? 0) > 0 && (
+                                                        <div className="mt-1 pt-1 border-t border-gray-700/40">
+                                                            <span className="text-xs text-amber-400 font-semibold">Total: ₹{(result.total_fine ?? 0).toLocaleString('en-IN')}</span>
+                                                            {(result.total_penalty_points ?? 0) > 0 && (
+                                                                <span className="text-[10px] text-gray-500 ml-2">{result.total_penalty_points} pts</span>
+                                                            )}
+                                                        </div>
+                                                    )}
                                                     {/* Helmet status for 2W */}
-                                                    {result.vehicle_type === '2W' && result.helmet_detected !== null && result.helmet_detected !== undefined && (
+                                                    {result.vehicle_type === '2W' && result.helmet_detected !== null && result.helmet_detected !== undefined && violations.length === 0 && (
                                                         <span className={`inline-block px-3 py-1 rounded-lg text-sm font-medium ${result.helmet_detected
                                                             ? 'bg-emerald-500/20 text-emerald-400'
                                                             : 'bg-rose-500/20 text-rose-400'
@@ -670,14 +855,35 @@ function AnalyticsPanel() {
     ];
 
     const chartData = [65, 40, 80, 55, 90, 45, 70];
+    const chartColors = [
+        'from-cyan-500/30 to-cyan-400',
+        'from-blue-500/30 to-blue-400',
+        'from-purple-500/30 to-purple-400',
+        'from-cyan-500/30 to-cyan-400',
+        'from-emerald-500/30 to-emerald-400',
+        'from-blue-500/30 to-blue-400',
+        'from-purple-500/30 to-purple-400',
+    ];
 
     return (
-        <div className="space-y-6">
-            <div>
-                <h2 className="font-orbitron text-2xl font-bold bg-gradient-to-r from-cyan-400 to-blue-500 bg-clip-text text-transparent">
-                    Analytics Overview
-                </h2>
-                <p className="text-gray-500 text-sm mt-1">Real-time traffic monitoring statistics</p>
+        <div className="space-y-8">
+            <div className="flex items-center gap-4">
+                <motion.div
+                    className="w-14 h-14 rounded-2xl bg-gradient-to-br from-cyan-500/20 to-blue-500/20 flex items-center justify-center border border-cyan-500/20"
+                    animate={{ boxShadow: ['0 0 15px rgba(0,240,255,0.1)', '0 0 25px rgba(0,240,255,0.2)', '0 0 15px rgba(0,240,255,0.1)'] }}
+                    transition={{ duration: 3, repeat: Infinity }}
+                >
+                    <span className="text-2xl">📊</span>
+                </motion.div>
+                <div>
+                    <h2 className="font-orbitron text-2xl font-bold bg-gradient-to-r from-cyan-400 via-blue-400 to-purple-500 bg-clip-text text-transparent">
+                        Analytics Overview
+                    </h2>
+                    <p className="text-gray-500 text-sm mt-0.5 flex items-center gap-2">
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                        Real-time traffic monitoring statistics
+                    </p>
+                </div>
             </div>
 
             {/* Stats Grid */}
@@ -689,23 +895,38 @@ function AnalyticsPanel() {
 
             {/* Chart */}
             <GlassCard className="p-6" delay={0.4}>
-                <h3 className="font-orbitron text-sm text-gray-400 mb-6">VIOLATION TRENDS</h3>
-                <div className="flex items-end justify-between h-40 gap-3">
-                    {chartData.map((height, i) => (
-                        <motion.div
-                            key={i}
-                            className="flex-1 bg-gradient-to-t from-cyan-500/20 to-cyan-400 rounded-t-lg relative group"
-                            initial={{ height: 0 }}
-                            animate={{ height: `${height}%` }}
-                            transition={{ delay: 0.5 + i * 0.1, duration: 0.5, ease: 'easeOut' }}
-                        >
-                            <div className="absolute -top-8 left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity bg-gray-800 px-2 py-1 rounded text-xs">
-                                {height}
-                            </div>
-                        </motion.div>
-                    ))}
+                <div className="flex items-center justify-between mb-6">
+                    <h3 className="font-orbitron text-sm text-gray-400 uppercase tracking-wider">Violation Trends</h3>
+                    <span className="text-[10px] text-gray-600 px-2.5 py-1 rounded-full border border-gray-800 uppercase tracking-wider">This Week</span>
                 </div>
-                <div className="flex justify-between mt-4 text-xs text-gray-500">
+                <div className="relative">
+                    {/* Horizontal grid lines */}
+                    <div className="absolute inset-0 flex flex-col justify-between pointer-events-none">
+                        {[...Array(4)].map((_, i) => (
+                            <div key={i} className="border-t border-gray-800/40 w-full" />
+                        ))}
+                    </div>
+                    <div className="flex items-end justify-between h-44 gap-3 relative">
+                        {chartData.map((height, i) => (
+                            <motion.div
+                                key={i}
+                                className={`flex-1 bg-gradient-to-t ${chartColors[i]} rounded-t-lg relative group cursor-pointer`}
+                                initial={{ height: 0 }}
+                                animate={{ height: `${height}%` }}
+                                transition={{ delay: 0.5 + i * 0.1, duration: 0.6, ease: 'easeOut' }}
+                                whileHover={{ filter: 'brightness(1.2)' }}
+                            >
+                                {/* Glow top */}
+                                <div className="absolute top-0 inset-x-0 h-1 bg-white/20 rounded-t-lg" />
+                                <div className="absolute -top-9 left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-all duration-200 bg-gray-800/90 backdrop-blur-sm px-3 py-1.5 rounded-lg text-xs font-medium text-white shadow-xl border border-gray-700/50">
+                                    {height}%
+                                    <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-2 h-2 bg-gray-800/90 rotate-45 border-b border-r border-gray-700/50" />
+                                </div>
+                            </motion.div>
+                        ))}
+                    </div>
+                </div>
+                <div className="flex justify-between mt-4 text-xs text-gray-500 font-medium">
                     {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map((day) => (
                         <span key={day}>{day}</span>
                     ))}
@@ -800,11 +1021,23 @@ function ComplaintForm() {
 
     return (
         <div className="space-y-6">
-            <div>
-                <h2 className="font-orbitron text-2xl font-bold bg-gradient-to-r from-pink-400 to-rose-500 bg-clip-text text-transparent">
-                    Submit Report
-                </h2>
-                <p className="text-gray-500 text-sm mt-1">AI-powered complaint classification</p>
+            <div className="flex items-center gap-4">
+                <motion.div
+                    className="w-14 h-14 rounded-2xl bg-gradient-to-br from-pink-500/20 to-rose-500/20 flex items-center justify-center border border-pink-500/20"
+                    animate={{ boxShadow: ['0 0 15px rgba(255,0,153,0.1)', '0 0 25px rgba(255,0,153,0.2)', '0 0 15px rgba(255,0,153,0.1)'] }}
+                    transition={{ duration: 3, repeat: Infinity }}
+                >
+                    <span className="text-2xl">📝</span>
+                </motion.div>
+                <div>
+                    <h2 className="font-orbitron text-2xl font-bold bg-gradient-to-r from-pink-400 via-rose-400 to-orange-400 bg-clip-text text-transparent">
+                        Submit Report
+                    </h2>
+                    <p className="text-gray-500 text-sm mt-0.5 flex items-center gap-2">
+                        <span className="w-1.5 h-1.5 rounded-full bg-pink-400 animate-pulse" />
+                        AI-powered complaint classification
+                    </p>
+                </div>
             </div>
 
             <AnimatePresence>
@@ -823,7 +1056,8 @@ function ComplaintForm() {
             <GlassCard className="p-6 space-y-6" delay={0.1} glow="pink">
                 {/* Description with AI Analysis */}
                 <div>
-                    <label className="block text-sm text-gray-400 mb-3">
+                    <label className="block text-sm text-gray-400 mb-3 flex items-center gap-2">
+                        <span className="w-1.5 h-1.5 rounded-full bg-pink-400/60" />
                         Describe the Incident
                         {aiClassifying && (
                             <span className="ml-2 text-cyan-400">
@@ -841,9 +1075,11 @@ function ComplaintForm() {
                         onChange={(e) => setDescription(e.target.value)}
                         placeholder="Describe what happened... (AI will auto-classify)"
                         rows={5}
-                        className="w-full px-4 py-3 bg-gray-900/50 border border-gray-700 rounded-xl text-white placeholder-gray-500 focus:border-pink-500 focus:outline-none transition-all resize-none"
+                        className="w-full px-4 py-3.5 bg-gray-900/60 border border-gray-700/60 rounded-xl text-white placeholder-gray-600 focus:border-pink-500/60 focus:shadow-[0_0_15px_rgba(255,0,153,0.08)] focus:outline-none transition-all resize-none"
                     />
-                    <p className="text-xs text-gray-600 mt-1">Type at least 20 characters for AI classification</p>
+                    <p className="text-xs text-gray-600 mt-1.5 flex items-center gap-1">
+                        <span className="text-[10px]">ℹ️</span> Type at least 20 characters for AI classification
+                    </p>
                 </div>
 
                 {/* AI Suggestion Card */}
@@ -897,11 +1133,14 @@ function ComplaintForm() {
 
                 {/* Category Dropdown */}
                 <div>
-                    <label className="block text-sm text-gray-400 mb-3">Category</label>
+                    <label className="block text-sm text-gray-400 mb-3 flex items-center gap-2">
+                        <span className="w-1.5 h-1.5 rounded-full bg-pink-400/60" />
+                        Category
+                    </label>
                     <select
                         value={category}
                         onChange={(e) => setCategory(e.target.value)}
-                        className="w-full px-4 py-3 bg-gray-900/50 border border-gray-700 rounded-xl text-white focus:border-pink-500 focus:outline-none transition-all appearance-none cursor-pointer"
+                        className="w-full px-4 py-3.5 bg-gray-900/60 border border-gray-700/60 rounded-xl text-white focus:border-pink-500/60 focus:shadow-[0_0_15px_rgba(255,0,153,0.08)] focus:outline-none transition-all appearance-none cursor-pointer"
                     >
                         <option value="">Select category...</option>
                         <option value="reckless_driving">Reckless Driving</option>
@@ -920,8 +1159,8 @@ function ComplaintForm() {
                 <motion.button
                     onClick={handleSubmit}
                     disabled={submitting || !description || !category}
-                    className="w-full py-4 bg-gradient-to-r from-pink-500 to-rose-600 rounded-xl font-semibold text-white disabled:opacity-50 disabled:cursor-not-allowed"
-                    whileHover={{ scale: submitting ? 1 : 1.01 }}
+                    className="w-full py-4 bg-gradient-to-r from-pink-500 to-rose-600 rounded-xl font-semibold text-white disabled:opacity-40 disabled:cursor-not-allowed shadow-lg shadow-pink-500/20 transition-shadow hover:shadow-pink-500/30"
+                    whileHover={{ scale: submitting ? 1 : 1.01, boxShadow: submitting ? undefined : '0 0 30px rgba(255,0,153,0.25)' }}
                     whileTap={{ scale: submitting ? 1 : 0.99 }}
                 >
                     {submitting ? (
@@ -930,7 +1169,7 @@ function ComplaintForm() {
                             animate={{ rotate: 360 }}
                             transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
                         />
-                    ) : 'Submit Report'}
+                    ) : '🚀 Submit Report'}
                 </motion.button>
             </GlassCard>
         </div>
@@ -979,15 +1218,27 @@ function InboxPanel() {
         return (
             <div className="space-y-6">
                 <div className="flex items-center justify-between">
-                    <div>
-                        <h2 className="font-orbitron text-2xl font-bold bg-gradient-to-r from-cyan-400 to-blue-500 bg-clip-text text-transparent">
-                            Inbox
-                        </h2>
-                        <p className="text-gray-500 text-sm mt-1">{messages.length} messages</p>
+                    <div className="flex items-center gap-4">
+                        <motion.div
+                            className="w-14 h-14 rounded-2xl bg-gradient-to-br from-cyan-500/20 to-blue-500/20 flex items-center justify-center border border-cyan-500/20"
+                            animate={{ boxShadow: ['0 0 15px rgba(0,240,255,0.1)', '0 0 25px rgba(0,240,255,0.2)', '0 0 15px rgba(0,240,255,0.1)'] }}
+                            transition={{ duration: 3, repeat: Infinity }}
+                        >
+                            <span className="text-2xl">📬</span>
+                        </motion.div>
+                        <div>
+                            <h2 className="font-orbitron text-2xl font-bold bg-gradient-to-r from-cyan-400 via-blue-400 to-purple-500 bg-clip-text text-transparent">
+                                Inbox
+                            </h2>
+                            <p className="text-gray-500 text-sm mt-0.5 flex items-center gap-2">
+                                <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-pulse" />
+                                {messages.length} messages
+                            </p>
+                        </div>
                     </div>
                     {unreadCount > 0 && (
                         <motion.span
-                            className="px-3 py-1.5 bg-rose-500/20 text-rose-400 rounded-full text-sm font-medium"
+                            className="px-3.5 py-1.5 bg-rose-500/15 text-rose-400 rounded-full text-sm font-medium border border-rose-500/20"
                             animate={{ scale: [1, 1.05, 1] }}
                             transition={{ duration: 2, repeat: Infinity }}
                         >
@@ -1042,11 +1293,23 @@ function InboxPanel() {
     // Admin view - complaints
     return (
         <div className="space-y-6">
-            <div>
-                <h2 className="font-orbitron text-2xl font-bold bg-gradient-to-r from-cyan-400 to-blue-500 bg-clip-text text-transparent">
-                    Inbox
-                </h2>
-                <p className="text-gray-500 text-sm mt-1">{complaints.length} complaints</p>
+            <div className="flex items-center gap-4">
+                <motion.div
+                    className="w-14 h-14 rounded-2xl bg-gradient-to-br from-cyan-500/20 to-blue-500/20 flex items-center justify-center border border-cyan-500/20"
+                    animate={{ boxShadow: ['0 0 15px rgba(0,240,255,0.1)', '0 0 25px rgba(0,240,255,0.2)', '0 0 15px rgba(0,240,255,0.1)'] }}
+                    transition={{ duration: 3, repeat: Infinity }}
+                >
+                    <span className="text-2xl">📨</span>
+                </motion.div>
+                <div>
+                    <h2 className="font-orbitron text-2xl font-bold bg-gradient-to-r from-cyan-400 via-blue-400 to-purple-500 bg-clip-text text-transparent">
+                        Complaints
+                    </h2>
+                    <p className="text-gray-500 text-sm mt-0.5 flex items-center gap-2">
+                        <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-pulse" />
+                        {complaints.length} complaints
+                    </p>
+                </div>
             </div>
 
             <div className="space-y-3">
@@ -1172,7 +1435,7 @@ function ViolationPredictor() {
     const days = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
 
     return (
-        <div className="max-w-4xl mx-auto space-y-10">
+        <div className="w-full space-y-10">
             {/* Header */}
             <motion.div
                 initial={{ opacity: 0, y: -20 }}
@@ -1570,75 +1833,169 @@ function ProfilePanel() {
     ];
 
     return (
-        <div className="w-full space-y-6">
+        <div className="w-full space-y-8">
+            {/* Page Header */}
+            <div className="flex items-center gap-4">
+                <motion.div
+                    className="w-14 h-14 rounded-2xl bg-gradient-to-br from-purple-500/20 to-pink-500/20 flex items-center justify-center border border-purple-500/20"
+                    animate={{ boxShadow: ['0 0 15px rgba(168,85,247,0.1)', '0 0 25px rgba(168,85,247,0.2)', '0 0 15px rgba(168,85,247,0.1)'] }}
+                    transition={{ duration: 3, repeat: Infinity }}
+                >
+                    <span className="text-2xl">👤</span>
+                </motion.div>
+                <div>
+                    <h2 className="font-orbitron text-2xl font-bold bg-gradient-to-r from-purple-400 via-pink-400 to-cyan-400 bg-clip-text text-transparent">
+                        My Profile
+                    </h2>
+                    <p className="text-gray-500 text-sm mt-0.5 flex items-center gap-2">
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                        Customize your identity & preferences
+                    </p>
+                </div>
+            </div>
+
             {/* Status messages */}
             <AnimatePresence>
                 {error && (
                     <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
-                        className="p-3 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-400 text-sm text-center">
-                        ⚠ {error}
+                        className="p-4 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-400 text-sm flex items-center gap-3">
+                        <span className="text-lg">⚠️</span>
+                        <span>{error}</span>
                     </motion.div>
                 )}
                 {success && (
                     <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
-                        className="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-sm text-center">
-                        ✅ {success}
+                        className="p-4 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-sm flex items-center gap-3">
+                        <span className="text-lg">✅</span>
+                        <span>{success}</span>
                     </motion.div>
                 )}
             </AnimatePresence>
 
             {/* Two-column layout */}
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
                 {/* LEFT COLUMN — Avatar preview & identity */}
                 <motion.div
                     initial={{ opacity: 0, x: -20 }}
                     animate={{ opacity: 1, x: 0 }}
-                    className="lg:col-span-1 space-y-5"
+                    className="lg:col-span-1 space-y-6"
                 >
-                    {/* Big avatar preview card */}
-                    <div className="p-6 rounded-2xl bg-gray-900/60 backdrop-blur-xl border border-gray-800/50 relative overflow-hidden">
-                        <motion.div className="absolute inset-0 bg-gradient-to-br from-cyan-500/5 via-transparent to-purple-500/5" animate={{ opacity: [0.3, 0.6, 0.3] }} transition={{ duration: 5, repeat: Infinity }} />
+                    {/* Premium Avatar Card */}
+                    <div className="relative p-8 rounded-3xl bg-gray-900/60 backdrop-blur-xl border border-gray-800/50 overflow-hidden">
+                        {/* Animated background gradients */}
+                        <motion.div
+                            className="absolute inset-0 bg-gradient-to-br from-cyan-500/5 via-transparent to-purple-500/5"
+                            animate={{ opacity: [0.3, 0.7, 0.3] }}
+                            transition={{ duration: 5, repeat: Infinity }}
+                        />
+                        <motion.div
+                            className="absolute -top-20 -right-20 w-40 h-40 rounded-full bg-purple-500/10 blur-3xl"
+                            animate={{ scale: [1, 1.3, 1], opacity: [0.3, 0.5, 0.3] }}
+                            transition={{ duration: 4, repeat: Infinity }}
+                        />
+                        <motion.div
+                            className="absolute -bottom-20 -left-20 w-40 h-40 rounded-full bg-cyan-500/10 blur-3xl"
+                            animate={{ scale: [1.3, 1, 1.3], opacity: [0.3, 0.5, 0.3] }}
+                            transition={{ duration: 4, repeat: Infinity }}
+                        />
+
                         <div className="relative z-10 flex flex-col items-center text-center">
-                            {/* Large avatar */}
-                            <motion.div
-                                className={`w-28 h-28 rounded-3xl bg-gradient-to-br ${currentGradient.from} ${currentGradient.to} flex items-center justify-center font-orbitron font-bold text-5xl shadow-2xl mb-5 border-2 border-white/10`}
-                                animate={{ y: [0, -4, 0] }}
-                                transition={{ duration: 3, repeat: Infinity, ease: 'easeInOut' }}
-                                whileHover={{ scale: 1.05, rotate: [0, -2, 2, 0] }}
-                            >
-                                {selectedEmoji || user?.username?.[0]?.toUpperCase() || 'U'}
-                            </motion.div>
+                            {/* Avatar with orbital ring */}
+                            <div className="relative mb-6">
+                                {/* Outer orbital ring */}
+                                <motion.div
+                                    className="absolute -inset-3 rounded-[28px] border border-dashed border-cyan-500/20"
+                                    animate={{ rotate: 360 }}
+                                    transition={{ duration: 20, repeat: Infinity, ease: 'linear' }}
+                                />
+                                {/* Glow ring */}
+                                <motion.div
+                                    className={`absolute -inset-1.5 rounded-[26px] bg-gradient-to-br ${currentGradient.from} ${currentGradient.to} opacity-20 blur-sm`}
+                                    animate={{ opacity: [0.15, 0.3, 0.15] }}
+                                    transition={{ duration: 3, repeat: Infinity }}
+                                />
+                                {/* Main avatar */}
+                                <motion.div
+                                    className={`relative w-32 h-32 rounded-3xl bg-gradient-to-br ${currentGradient.from} ${currentGradient.to} flex items-center justify-center font-orbitron font-bold text-5xl shadow-2xl border-2 border-white/10`}
+                                    animate={{ y: [0, -4, 0] }}
+                                    transition={{ duration: 3, repeat: Infinity, ease: 'easeInOut' }}
+                                    whileHover={{ scale: 1.05, rotate: [0, -3, 3, 0] }}
+                                >
+                                    {selectedEmoji || user?.username?.[0]?.toUpperCase() || 'U'}
+                                </motion.div>
+                                {/* Online indicator */}
+                                <motion.div
+                                    className="absolute -bottom-1 -right-1 w-6 h-6 bg-emerald-400 rounded-full border-3 border-gray-900 flex items-center justify-center"
+                                    animate={{ scale: [1, 1.15, 1] }}
+                                    transition={{ duration: 2, repeat: Infinity }}
+                                >
+                                    <div className="w-2 h-2 bg-white rounded-full" />
+                                </motion.div>
+                            </div>
+
                             <h3 className="font-orbitron text-xl font-bold text-white mb-1">{user?.username || 'User'}</h3>
-                            <p className="text-gray-400 text-sm mb-3">{user?.email}</p>
-                            <span className={`text-xs px-3 py-1 rounded-full font-semibold border shadow-lg ${roleBadge.bg} ${roleBadge.text} ${roleBadge.border} ${roleBadge.glow}`}>
+                            <p className="text-gray-400 text-sm mb-4">{user?.email}</p>
+
+                            {/* Role badge with glow */}
+                            <motion.span
+                                className={`text-xs px-4 py-1.5 rounded-full font-semibold border shadow-lg ${roleBadge.bg} ${roleBadge.text} ${roleBadge.border} ${roleBadge.glow}`}
+                                whileHover={{ scale: 1.05 }}
+                            >
                                 {roleBadge.label}
-                            </span>
+                            </motion.span>
+
+                            {/* Theme label */}
+                            <div className="flex items-center gap-2 mt-4">
+                                <div className={`w-3 h-3 rounded-full bg-gradient-to-br ${currentGradient.from} ${currentGradient.to}`} />
+                                <span className="text-[11px] text-gray-500">{currentGradient.label} Theme</span>
+                            </div>
                         </div>
                     </div>
 
-                    {/* Quick info */}
-                    <div className="p-5 rounded-2xl bg-gray-900/60 backdrop-blur-xl border border-gray-800/50 space-y-3">
-                        <h4 className="text-xs text-gray-500 uppercase tracking-wider font-medium">Account Info</h4>
-                        <div className="space-y-2.5 text-sm">
-                            <div className="flex justify-between items-center py-1.5">
-                                <span className="text-gray-500 flex items-center gap-2">🆔 User ID</span>
-                                <span className="text-gray-300 font-mono text-xs bg-gray-800/50 px-2 py-0.5 rounded">{user?.id?.slice(0, 12)}…</span>
-                            </div>
-                            <div className="w-full h-px bg-gray-800/50" />
-                            <div className="flex justify-between items-center py-1.5">
-                                <span className="text-gray-500 flex items-center gap-2">📅 Joined</span>
-                                <span className="text-gray-300 text-xs">{user?.created_at ? new Date(user.created_at).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' }) : 'N/A'}</span>
-                            </div>
-                            <div className="w-full h-px bg-gray-800/50" />
-                            <div className="flex justify-between items-center py-1.5">
-                                <span className="text-gray-500 flex items-center gap-2">📧 Email</span>
-                                <span className="text-gray-300 text-xs truncate max-w-[140px]">{user?.email}</span>
-                            </div>
-                            <div className="w-full h-px bg-gray-800/50" />
-                            <div className="flex justify-between items-center py-1.5">
-                                <span className="text-gray-500 flex items-center gap-2">🎨 Theme</span>
-                                <span className="text-gray-300 text-xs">{currentGradient.label}</span>
-                            </div>
+                    {/* Activity Stats */}
+                    <div className="grid grid-cols-3 gap-3">
+                        {[
+                            { label: 'Scans', value: '—', color: 'from-cyan-500/20 to-blue-500/20', borderColor: 'border-cyan-500/15' },
+                            { label: 'Reports', value: '—', color: 'from-pink-500/20 to-rose-500/20', borderColor: 'border-pink-500/15' },
+                            { label: 'Days', value: user?.created_at ? Math.floor((Date.now() - new Date(user.created_at).getTime()) / 86400000).toString() : '—', color: 'from-purple-500/20 to-violet-500/20', borderColor: 'border-purple-500/15' },
+                        ].map((stat, i) => (
+                            <motion.div
+                                key={stat.label}
+                                initial={{ opacity: 0, y: 10 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                transition={{ delay: 0.3 + i * 0.1 }}
+                                className={`p-3.5 rounded-2xl bg-gradient-to-br ${stat.color} border ${stat.borderColor} text-center`}
+                            >
+                                <p className="font-orbitron text-xl font-bold text-white">{stat.value}</p>
+                                <p className="text-[10px] text-gray-400 uppercase tracking-wider mt-0.5">{stat.label}</p>
+                            </motion.div>
+                        ))}
+                    </div>
+
+                    {/* Quick Info Card */}
+                    <div className="p-5 rounded-2xl bg-gray-900/60 backdrop-blur-xl border border-gray-800/50">
+                        <div className="flex items-center gap-2 mb-4">
+                            <span className="text-sm">📋</span>
+                            <h4 className="text-xs text-gray-400 uppercase tracking-widest font-semibold">Account Info</h4>
+                        </div>
+                        <div className="space-y-0.5">
+                            {[
+                                { icon: '🆔', label: 'User ID', value: user?.id?.slice(0, 12) + '…', mono: true },
+                                { icon: '📅', label: 'Joined', value: user?.created_at ? new Date(user.created_at).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' }) : 'N/A' },
+                                { icon: '📧', label: 'Email', value: user?.email || 'N/A', truncate: true },
+                                { icon: '🎨', label: 'Theme', value: currentGradient.label },
+                            ].map((item, i) => (
+                                <motion.div
+                                    key={i}
+                                    className="flex justify-between items-center py-2.5 px-2 rounded-lg hover:bg-gray-800/30 transition-colors group"
+                                    whileHover={{ x: 2 }}
+                                >
+                                    <span className="text-gray-500 flex items-center gap-2 text-xs">{item.icon} {item.label}</span>
+                                    <span className={`text-xs ${item.mono ? 'font-mono bg-gray-800/60 px-2.5 py-0.5 rounded-md' : ''} ${item.truncate ? 'truncate max-w-[130px]' : ''} text-gray-300 group-hover:text-white transition-colors`}>
+                                        {item.value}
+                                    </span>
+                                </motion.div>
+                            ))}
                         </div>
                     </div>
                 </motion.div>
@@ -1650,18 +2007,26 @@ function ProfilePanel() {
                     transition={{ delay: 0.1 }}
                     className="lg:col-span-2"
                 >
-                    {/* Tab Navigation */}
-                    <div className="flex gap-2 mb-5 p-1 rounded-xl bg-gray-900/40 border border-gray-800/30">
+                    {/* Premium Tab Navigation */}
+                    <div className="flex gap-1.5 mb-6 p-1.5 rounded-2xl bg-gray-900/50 border border-gray-800/40 backdrop-blur-sm">
                         {tabs.map((tab) => (
                             <motion.button
                                 key={tab.id}
                                 onClick={() => setActiveTab(tab.id)}
-                                className={`flex-1 py-2.5 px-4 rounded-lg text-sm font-medium transition-all flex items-center justify-center gap-2 ${activeTab === tab.id ? 'bg-gradient-to-r from-cyan-500/20 to-blue-500/20 text-cyan-400 border border-cyan-500/20' : 'text-gray-500 hover:text-gray-300'}`}
+                                className={`relative flex-1 py-3 px-4 rounded-xl text-sm font-medium transition-all flex items-center justify-center gap-2.5 ${activeTab === tab.id ? 'text-white' : 'text-gray-500 hover:text-gray-300'}`}
                                 whileHover={{ scale: 1.01 }}
                                 whileTap={{ scale: 0.99 }}
                             >
-                                <span>{tab.icon}</span>
-                                {tab.label}
+                                {activeTab === tab.id && (
+                                    <motion.div
+                                        layoutId="profileTabBg"
+                                        className="absolute inset-0 bg-gradient-to-r from-cyan-500/15 via-purple-500/15 to-pink-500/15 rounded-xl border border-cyan-500/20"
+                                        initial={false}
+                                        transition={{ type: 'spring', stiffness: 300, damping: 30 }}
+                                    />
+                                )}
+                                <span className="relative z-10 text-base">{tab.icon}</span>
+                                <span className="relative z-10">{tab.label}</span>
                             </motion.button>
                         ))}
                     </div>
@@ -1674,69 +2039,96 @@ function ProfilePanel() {
                                 initial={{ opacity: 0, y: 10 }}
                                 animate={{ opacity: 1, y: 0 }}
                                 exit={{ opacity: 0, y: -10 }}
-                                className="space-y-5"
+                                className="space-y-6"
                             >
                                 {/* Gradient Picker */}
-                                <div className="p-5 rounded-2xl bg-gray-900/60 backdrop-blur-xl border border-gray-800/50">
-                                    <h3 className="text-sm text-gray-300 font-medium mb-1">Background Gradient</h3>
-                                    <p className="text-xs text-gray-500 mb-4">Choose a color theme for your avatar</p>
-                                    <div className="grid grid-cols-8 gap-2.5">
+                                <div className="p-6 rounded-2xl bg-gray-900/60 backdrop-blur-xl border border-gray-800/50 relative overflow-hidden">
+                                    <motion.div className="absolute top-0 inset-x-0 h-px bg-gradient-to-r from-transparent via-cyan-500/30 to-transparent" />
+                                    <div className="flex items-center gap-2 mb-1">
+                                        <span className="text-base">🎨</span>
+                                        <h3 className="text-sm text-gray-200 font-semibold">Background Gradient</h3>
+                                    </div>
+                                    <p className="text-xs text-gray-500 mb-5">Choose a color theme for your avatar</p>
+                                    <div className="grid grid-cols-8 gap-3">
                                         {AVATAR_GRADIENTS.map((g) => (
                                             <motion.button
                                                 key={g.id}
                                                 onClick={() => setSelectedGradient(g.id)}
-                                                whileHover={{ scale: 1.15, y: -3 }}
+                                                whileHover={{ scale: 1.2, y: -4 }}
                                                 whileTap={{ scale: 0.9 }}
                                                 className="group relative"
                                             >
-                                                <div className={`w-full aspect-square rounded-xl bg-gradient-to-br ${g.from} ${g.to} flex items-center justify-center transition-all shadow-lg ${selectedGradient === g.id ? 'ring-2 ring-white ring-offset-2 ring-offset-gray-900 shadow-xl' : 'opacity-70 hover:opacity-100'}`}>
+                                                <div className={`w-full aspect-square rounded-xl bg-gradient-to-br ${g.from} ${g.to} flex items-center justify-center transition-all duration-200 ${selectedGradient === g.id ? 'ring-2 ring-white ring-offset-2 ring-offset-gray-900 shadow-xl shadow-white/10 scale-105' : 'opacity-60 hover:opacity-100 shadow-lg'}`}>
                                                     {selectedGradient === g.id && (
-                                                        <motion.span initial={{ scale: 0 }} animate={{ scale: 1 }} className="text-white text-sm font-bold">✓</motion.span>
+                                                        <motion.span initial={{ scale: 0, rotate: -180 }} animate={{ scale: 1, rotate: 0 }} transition={{ type: 'spring' }} className="text-white text-sm font-bold drop-shadow-lg">✓</motion.span>
                                                     )}
                                                 </div>
-                                                <span className="absolute -bottom-5 left-1/2 -translate-x-1/2 text-[10px] text-gray-500 opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">{g.label}</span>
+                                                <span className="absolute -bottom-6 left-1/2 -translate-x-1/2 text-[9px] text-gray-500 opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap font-medium">{g.label}</span>
                                             </motion.button>
                                         ))}
                                     </div>
                                 </div>
 
                                 {/* Emoji Picker */}
-                                <div className="p-5 rounded-2xl bg-gray-900/60 backdrop-blur-xl border border-gray-800/50">
-                                    <h3 className="text-sm text-gray-300 font-medium mb-1">Avatar Icon</h3>
-                                    <p className="text-xs text-gray-500 mb-4">Pick an icon or use your initial letter</p>
-                                    <div className="grid grid-cols-6 sm:grid-cols-9 gap-2">
-                                        {/* Initial letter option */}
-                                        <motion.button
-                                            onClick={() => setSelectedEmoji('')}
-                                            whileHover={{ scale: 1.1, y: -2 }}
-                                            whileTap={{ scale: 0.9 }}
-                                            className={`aspect-square rounded-xl border flex items-center justify-center text-sm font-bold transition-all ${!selectedEmoji ? 'bg-cyan-500/15 border-cyan-500/40 text-cyan-400 shadow-lg shadow-cyan-500/10' : 'bg-gray-800/40 border-gray-700/40 text-gray-500 hover:border-gray-600/60'}`}
-                                        >
-                                            {user?.username?.[0]?.toUpperCase() || 'A'}
-                                        </motion.button>
-                                        {AVATAR_EMOJIS.map((emoji) => (
-                                            <motion.button
-                                                key={emoji}
-                                                onClick={() => setSelectedEmoji(emoji)}
-                                                whileHover={{ scale: 1.15, y: -3 }}
-                                                whileTap={{ scale: 0.9 }}
-                                                className={`aspect-square rounded-xl border flex items-center justify-center text-xl transition-all ${selectedEmoji === emoji ? 'bg-cyan-500/15 border-cyan-500/40 shadow-lg shadow-cyan-500/10' : 'bg-gray-800/40 border-gray-700/40 hover:border-gray-600/60 hover:bg-gray-800/60'}`}
-                                            >
-                                                {emoji}
-                                            </motion.button>
-                                        ))}
+                                <div className="p-6 rounded-2xl bg-gray-900/60 backdrop-blur-xl border border-gray-800/50 relative overflow-hidden">
+                                    <motion.div className="absolute top-0 inset-x-0 h-px bg-gradient-to-r from-transparent via-purple-500/30 to-transparent" />
+                                    <div className="flex items-center gap-2 mb-1">
+                                        <span className="text-base">😎</span>
+                                        <h3 className="text-sm text-gray-200 font-semibold">Avatar Icon</h3>
+                                    </div>
+                                    <p className="text-xs text-gray-500 mb-5">Pick an icon or use your initial letter</p>
+
+                                    {/* Category labels */}
+                                    <div className="space-y-4">
+                                        <div>
+                                            <p className="text-[10px] text-gray-600 uppercase tracking-widest mb-2 font-medium">Your Initial</p>
+                                            <div className="flex gap-2">
+                                                <motion.button
+                                                    onClick={() => setSelectedEmoji('')}
+                                                    whileHover={{ scale: 1.1, y: -2 }}
+                                                    whileTap={{ scale: 0.9 }}
+                                                    className={`w-11 h-11 rounded-xl border flex items-center justify-center text-sm font-bold transition-all ${!selectedEmoji ? 'bg-cyan-500/15 border-cyan-500/40 text-cyan-400 shadow-lg shadow-cyan-500/10' : 'bg-gray-800/40 border-gray-700/40 text-gray-500 hover:border-gray-600/60'}`}
+                                                >
+                                                    {user?.username?.[0]?.toUpperCase() || 'A'}
+                                                </motion.button>
+                                            </div>
+                                        </div>
+                                        <div>
+                                            <p className="text-[10px] text-gray-600 uppercase tracking-widest mb-2 font-medium">Icons Collection</p>
+                                            <div className="grid grid-cols-6 sm:grid-cols-9 gap-2">
+                                                {AVATAR_EMOJIS.map((emoji) => (
+                                                    <motion.button
+                                                        key={emoji}
+                                                        onClick={() => setSelectedEmoji(emoji)}
+                                                        whileHover={{ scale: 1.15, y: -3 }}
+                                                        whileTap={{ scale: 0.9 }}
+                                                        className={`aspect-square rounded-xl border flex items-center justify-center text-xl transition-all duration-200 ${selectedEmoji === emoji ? 'bg-cyan-500/15 border-cyan-500/40 shadow-lg shadow-cyan-500/10 scale-105' : 'bg-gray-800/40 border-gray-700/40 hover:border-gray-600/60 hover:bg-gray-800/60'}`}
+                                                    >
+                                                        {emoji}
+                                                    </motion.button>
+                                                ))}
+                                            </div>
+                                        </div>
                                     </div>
                                 </div>
 
-                                {/* Save */}
+                                {/* Save Button */}
                                 <motion.button
                                     onClick={handleSaveAvatar}
                                     disabled={savingAvatar}
-                                    whileHover={{ scale: 1.01, boxShadow: '0 0 25px rgba(6, 182, 212, 0.3)' }}
+                                    whileHover={{ scale: 1.01, boxShadow: '0 0 30px rgba(6, 182, 212, 0.3)' }}
                                     whileTap={{ scale: 0.99 }}
-                                    className="w-full py-3.5 bg-gradient-to-r from-cyan-500 to-blue-600 rounded-xl font-semibold text-white disabled:opacity-50 shadow-lg shadow-cyan-500/20 text-sm"
+                                    className="w-full py-4 bg-gradient-to-r from-cyan-500 via-blue-500 to-purple-600 rounded-xl font-semibold text-white disabled:opacity-50 shadow-lg shadow-cyan-500/20 text-sm relative overflow-hidden group"
                                 >
-                                    {savingAvatar ? '⏳ Saving...' : '✨ Save Avatar'}
+                                    <motion.div
+                                        className="absolute inset-0 bg-gradient-to-r from-white/0 via-white/10 to-white/0"
+                                        initial={{ x: '-100%' }}
+                                        whileHover={{ x: '100%' }}
+                                        transition={{ duration: 0.6 }}
+                                    />
+                                    <span className="relative z-10">
+                                        {savingAvatar ? '⏳ Saving...' : '✨ Save Avatar'}
+                                    </span>
                                 </motion.button>
                             </motion.div>
                         )}
@@ -1748,43 +2140,72 @@ function ProfilePanel() {
                                 initial={{ opacity: 0, y: 10 }}
                                 animate={{ opacity: 1, y: 0 }}
                                 exit={{ opacity: 0, y: -10 }}
-                                className="space-y-5"
+                                className="space-y-6"
                             >
-                                <div className="p-5 rounded-2xl bg-gray-900/60 backdrop-blur-xl border border-gray-800/50">
-                                    <h3 className="text-sm text-gray-300 font-medium mb-1">Username</h3>
-                                    <p className="text-xs text-gray-500 mb-4">This is your public display name</p>
+                                {/* Username */}
+                                <div className="p-6 rounded-2xl bg-gray-900/60 backdrop-blur-xl border border-gray-800/50 relative overflow-hidden">
+                                    <motion.div className="absolute top-0 inset-x-0 h-px bg-gradient-to-r from-transparent via-cyan-500/30 to-transparent" />
+                                    <div className="flex items-center gap-2 mb-1">
+                                        <span className="text-base">✏️</span>
+                                        <h3 className="text-sm text-gray-200 font-semibold">Username</h3>
+                                    </div>
+                                    <p className="text-xs text-gray-500 mb-5">This is your public display name across SLEVIS</p>
                                     <div className="flex gap-3">
-                                        <input
-                                            type="text"
-                                            value={username}
-                                            onChange={(e) => setUsername(e.target.value)}
-                                            placeholder="New username"
-                                            className="flex-1 bg-gray-800/50 border border-gray-700/50 rounded-xl px-4 py-3 text-white placeholder-gray-600 focus:border-cyan-500/50 focus:outline-none transition-all text-sm"
-                                        />
+                                        <div className="flex-1 relative">
+                                            <input
+                                                type="text"
+                                                value={username}
+                                                onChange={(e) => setUsername(e.target.value)}
+                                                placeholder="New username"
+                                                className="w-full bg-gray-800/60 border border-gray-700/50 rounded-xl px-4 py-3.5 text-white placeholder-gray-600 focus:border-cyan-500/50 focus:shadow-[0_0_15px_rgba(0,240,255,0.08)] focus:outline-none transition-all text-sm"
+                                            />
+                                            {username.trim() !== user?.username && username.trim().length >= 2 && (
+                                                <motion.span
+                                                    initial={{ scale: 0 }}
+                                                    animate={{ scale: 1 }}
+                                                    className="absolute right-3 top-1/2 -translate-y-1/2 text-emerald-400 text-xs"
+                                                >
+                                                    ✓
+                                                </motion.span>
+                                            )}
+                                        </div>
                                         <motion.button
                                             onClick={handleUpdateUsername}
-                                            disabled={saving || username.trim() === user?.username}
-                                            whileHover={{ scale: 1.02 }}
+                                            disabled={saving || username.trim() === user?.username || username.trim().length < 2}
+                                            whileHover={{ scale: 1.02, boxShadow: '0 0 20px rgba(6, 182, 212, 0.2)' }}
                                             whileTap={{ scale: 0.98 }}
-                                            className="px-6 py-3 bg-gradient-to-r from-cyan-500 to-blue-500 rounded-xl font-medium text-sm text-white disabled:opacity-40 disabled:cursor-not-allowed shadow-lg shadow-cyan-500/10"
+                                            className="px-7 py-3.5 bg-gradient-to-r from-cyan-500 to-blue-500 rounded-xl font-medium text-sm text-white disabled:opacity-30 disabled:cursor-not-allowed shadow-lg shadow-cyan-500/15"
                                         >
-                                            {saving ? '...' : 'Save'}
+                                            {saving ? (
+                                                <motion.div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full" animate={{ rotate: 360 }} transition={{ duration: 1, repeat: Infinity, ease: 'linear' }} />
+                                            ) : 'Save'}
                                         </motion.button>
                                     </div>
                                 </div>
-                                <div className="p-5 rounded-2xl bg-gray-900/60 backdrop-blur-xl border border-gray-800/50">
-                                    <h3 className="text-sm text-gray-300 font-medium mb-3">Account Details</h3>
-                                    <div className="space-y-3 text-sm">
+
+                                {/* Account Details */}
+                                <div className="p-6 rounded-2xl bg-gray-900/60 backdrop-blur-xl border border-gray-800/50 relative overflow-hidden">
+                                    <motion.div className="absolute top-0 inset-x-0 h-px bg-gradient-to-r from-transparent via-purple-500/30 to-transparent" />
+                                    <div className="flex items-center gap-2 mb-5">
+                                        <span className="text-base">📋</span>
+                                        <h3 className="text-sm text-gray-200 font-semibold">Account Details</h3>
+                                    </div>
+                                    <div className="space-y-1">
                                         {[
                                             { icon: '🆔', label: 'User ID', value: user?.id ? `${user.id.slice(0, 20)}…` : 'N/A', mono: true },
                                             { icon: '📧', label: 'Email', value: user?.email || 'N/A' },
                                             { icon: '👤', label: 'Role', value: roleBadge.label, color: roleBadge.text },
                                             { icon: '📅', label: 'Member Since', value: user?.created_at ? new Date(user.created_at).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }) : 'N/A' },
+                                            { icon: '🌐', label: 'Status', value: 'Active', color: 'text-emerald-400' },
                                         ].map((item, i) => (
-                                            <div key={i} className={`flex justify-between items-center py-2.5 ${i < 3 ? 'border-b border-gray-800/40' : ''}`}>
-                                                <span className="text-gray-500 flex items-center gap-2 text-xs">{item.icon} {item.label}</span>
-                                                <span className={`text-xs ${item.mono ? 'font-mono bg-gray-800/50 px-2 py-0.5 rounded' : ''} ${item.color || 'text-gray-300'}`}>{item.value}</span>
-                                            </div>
+                                            <motion.div
+                                                key={i}
+                                                className={`flex justify-between items-center py-3 px-3 rounded-lg hover:bg-gray-800/30 transition-colors group ${i < 4 ? 'border-b border-gray-800/30' : ''}`}
+                                                whileHover={{ x: 2 }}
+                                            >
+                                                <span className="text-gray-500 flex items-center gap-2 text-xs font-medium">{item.icon} {item.label}</span>
+                                                <span className={`text-xs ${item.mono ? 'font-mono bg-gray-800/60 px-2.5 py-1 rounded-md' : ''} ${item.color || 'text-gray-300'} group-hover:text-white transition-colors`}>{item.value}</span>
+                                            </motion.div>
                                         ))}
                                     </div>
                                 </div>
@@ -1798,47 +2219,121 @@ function ProfilePanel() {
                                 initial={{ opacity: 0, y: 10 }}
                                 animate={{ opacity: 1, y: 0 }}
                                 exit={{ opacity: 0, y: -10 }}
-                                className="space-y-5"
+                                className="space-y-6"
                             >
-                                <div className="p-5 rounded-2xl bg-gray-900/60 backdrop-blur-xl border border-gray-800/50">
-                                    <h3 className="text-sm text-gray-300 font-medium mb-1">Change Password</h3>
-                                    <p className="text-xs text-gray-500 mb-4">Use a strong password with at least 6 characters</p>
-                                    <div className="space-y-3">
-                                        <input
-                                            type="password"
-                                            value={newPassword}
-                                            onChange={(e) => setNewPassword(e.target.value)}
-                                            placeholder="New password"
-                                            className="w-full bg-gray-800/50 border border-gray-700/50 rounded-xl px-4 py-3.5 text-white placeholder-gray-600 focus:border-purple-500/50 focus:outline-none transition-all text-sm"
-                                        />
-                                        <input
-                                            type="password"
-                                            value={confirmPassword}
-                                            onChange={(e) => setConfirmPassword(e.target.value)}
-                                            placeholder="Confirm new password"
-                                            className="w-full bg-gray-800/50 border border-gray-700/50 rounded-xl px-4 py-3.5 text-white placeholder-gray-600 focus:border-purple-500/50 focus:outline-none transition-all text-sm"
-                                        />
+                                {/* Change Password */}
+                                <div className="p-6 rounded-2xl bg-gray-900/60 backdrop-blur-xl border border-gray-800/50 relative overflow-hidden">
+                                    <motion.div className="absolute top-0 inset-x-0 h-px bg-gradient-to-r from-transparent via-purple-500/30 to-transparent" />
+                                    <div className="flex items-center gap-2 mb-1">
+                                        <span className="text-base">🔐</span>
+                                        <h3 className="text-sm text-gray-200 font-semibold">Change Password</h3>
+                                    </div>
+                                    <p className="text-xs text-gray-500 mb-5">Use a strong password with at least 6 characters</p>
+                                    <div className="space-y-4">
+                                        <div className="relative">
+                                            <input
+                                                type="password"
+                                                value={newPassword}
+                                                onChange={(e) => setNewPassword(e.target.value)}
+                                                placeholder="New password"
+                                                className="w-full bg-gray-800/60 border border-gray-700/50 rounded-xl px-4 py-3.5 text-white placeholder-gray-600 focus:border-purple-500/50 focus:shadow-[0_0_15px_rgba(168,85,247,0.08)] focus:outline-none transition-all text-sm"
+                                            />
+                                            {newPassword.length > 0 && (
+                                                <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1">
+                                                    {[...Array(3)].map((_, i) => (
+                                                        <motion.div
+                                                            key={i}
+                                                            initial={{ scaleX: 0 }}
+                                                            animate={{ scaleX: 1 }}
+                                                            className={`w-5 h-1 rounded-full ${newPassword.length >= (i + 1) * 3
+                                                                ? i === 2 ? 'bg-emerald-400' : i === 1 ? 'bg-amber-400' : 'bg-rose-400'
+                                                                : 'bg-gray-700'
+                                                                }`}
+                                                        />
+                                                    ))}
+                                                </div>
+                                            )}
+                                        </div>
+                                        <div className="relative">
+                                            <input
+                                                type="password"
+                                                value={confirmPassword}
+                                                onChange={(e) => setConfirmPassword(e.target.value)}
+                                                placeholder="Confirm new password"
+                                                className="w-full bg-gray-800/60 border border-gray-700/50 rounded-xl px-4 py-3.5 text-white placeholder-gray-600 focus:border-purple-500/50 focus:shadow-[0_0_15px_rgba(168,85,247,0.08)] focus:outline-none transition-all text-sm"
+                                            />
+                                            {confirmPassword.length > 0 && newPassword === confirmPassword && (
+                                                <motion.span
+                                                    initial={{ scale: 0 }}
+                                                    animate={{ scale: 1 }}
+                                                    className="absolute right-3 top-1/2 -translate-y-1/2 text-emerald-400 text-sm"
+                                                >
+                                                    ✓ Match
+                                                </motion.span>
+                                            )}
+                                        </div>
                                         <motion.button
                                             onClick={handleChangePassword}
                                             disabled={changingPassword || !newPassword || !confirmPassword}
-                                            whileHover={{ scale: 1.01, boxShadow: '0 0 25px rgba(168, 85, 247, 0.3)' }}
+                                            whileHover={{ scale: 1.01, boxShadow: '0 0 30px rgba(168, 85, 247, 0.3)' }}
                                             whileTap={{ scale: 0.99 }}
-                                            className="w-full py-3.5 bg-gradient-to-r from-purple-500 to-pink-600 rounded-xl font-semibold text-sm text-white disabled:opacity-40 disabled:cursor-not-allowed shadow-lg shadow-purple-500/20"
+                                            className="w-full py-4 bg-gradient-to-r from-purple-500 via-pink-500 to-rose-600 rounded-xl font-semibold text-sm text-white disabled:opacity-30 disabled:cursor-not-allowed shadow-lg shadow-purple-500/20 relative overflow-hidden group"
                                         >
-                                            {changingPassword ? '⏳ Changing...' : '🔐 Update Password'}
+                                            <motion.div
+                                                className="absolute inset-0 bg-gradient-to-r from-white/0 via-white/10 to-white/0"
+                                                initial={{ x: '-100%' }}
+                                                whileHover={{ x: '100%' }}
+                                                transition={{ duration: 0.6 }}
+                                            />
+                                            <span className="relative z-10">
+                                                {changingPassword ? '⏳ Changing...' : '🔐 Update Password'}
+                                            </span>
                                         </motion.button>
                                     </div>
                                 </div>
-                                <div className="p-5 rounded-2xl bg-gray-900/60 backdrop-blur-xl border border-amber-500/10">
-                                    <div className="flex items-start gap-3">
-                                        <span className="text-2xl">🛡️</span>
+
+                                {/* Security Status */}
+                                <div className="p-6 rounded-2xl bg-gray-900/60 backdrop-blur-xl border border-emerald-500/10 relative overflow-hidden">
+                                    <motion.div className="absolute top-0 inset-x-0 h-px bg-gradient-to-r from-transparent via-emerald-500/30 to-transparent" />
+                                    <div className="flex items-center gap-3 mb-4">
+                                        <div className="w-10 h-10 rounded-xl bg-emerald-500/15 flex items-center justify-center border border-emerald-500/20">
+                                            <span className="text-lg">✅</span>
+                                        </div>
                                         <div>
-                                            <h4 className="text-sm text-gray-300 font-medium mb-1">Security Tips</h4>
-                                            <ul className="text-xs text-gray-500 space-y-1.5">
-                                                <li>• Use a unique password you don&apos;t use elsewhere</li>
-                                                <li>• Mix uppercase, lowercase, numbers, and symbols</li>
-                                                <li>• Never share your password with anyone</li>
-                                                <li>• Sign out on shared devices after use</li>
+                                            <h4 className="text-sm text-gray-200 font-semibold">Security Status</h4>
+                                            <p className="text-xs text-emerald-400">Your account is secure</p>
+                                        </div>
+                                    </div>
+                                    <div className="space-y-2">
+                                        {[
+                                            { label: 'Email verified', status: true },
+                                            { label: 'Password set', status: true },
+                                            { label: 'Account active', status: true },
+                                        ].map((item, i) => (
+                                            <div key={i} className="flex items-center gap-2.5 px-2 py-1.5">
+                                                <div className={`w-4 h-4 rounded-full flex items-center justify-center ${item.status ? 'bg-emerald-500/20 text-emerald-400' : 'bg-gray-700/50 text-gray-500'}`}>
+                                                    <span className="text-[8px]">{item.status ? '✓' : '○'}</span>
+                                                </div>
+                                                <span className={`text-xs ${item.status ? 'text-gray-300' : 'text-gray-500'}`}>{item.label}</span>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+
+                                {/* Security Tips */}
+                                <div className="p-6 rounded-2xl bg-gray-900/60 backdrop-blur-xl border border-amber-500/10 relative overflow-hidden">
+                                    <motion.div className="absolute top-0 inset-x-0 h-px bg-gradient-to-r from-transparent via-amber-500/30 to-transparent" />
+                                    <div className="flex items-start gap-3">
+                                        <div className="w-10 h-10 rounded-xl bg-amber-500/15 flex items-center justify-center border border-amber-500/20 flex-shrink-0">
+                                            <span className="text-lg">🛡️</span>
+                                        </div>
+                                        <div>
+                                            <h4 className="text-sm text-gray-200 font-semibold mb-2">Security Tips</h4>
+                                            <ul className="text-xs text-gray-500 space-y-2">
+                                                <li className="flex items-start gap-2"><span className="text-amber-400/60 mt-0.5">▸</span> Use a unique password you don&apos;t use elsewhere</li>
+                                                <li className="flex items-start gap-2"><span className="text-amber-400/60 mt-0.5">▸</span> Mix uppercase, lowercase, numbers, and symbols</li>
+                                                <li className="flex items-start gap-2"><span className="text-amber-400/60 mt-0.5">▸</span> Never share your password with anyone</li>
+                                                <li className="flex items-start gap-2"><span className="text-amber-400/60 mt-0.5">▸</span> Sign out on shared devices after use</li>
                                             </ul>
                                         </div>
                                     </div>
@@ -2808,10 +3303,10 @@ export default function Dashboard() {
                         >
                             <div className="relative">
                                 <motion.div
-                                    className="w-12 h-12 rounded-2xl bg-gradient-to-br from-cyan-500 via-blue-500 to-purple-600 flex items-center justify-center font-orbitron font-black text-lg shadow-lg shadow-cyan-500/30"
+                                    className="w-12 h-12 rounded-2xl bg-gradient-to-br from-cyan-500 via-blue-500 to-purple-600 flex items-center justify-center font-orbitron font-black text-lg shadow-xl shadow-cyan-500/30"
                                     whileHover={{ scale: 1.05, rotate: 5 }}
                                     animate={{
-                                        boxShadow: ['0 0 20px rgba(0, 240, 255, 0.3)', '0 0 40px rgba(0, 240, 255, 0.5)', '0 0 20px rgba(0, 240, 255, 0.3)']
+                                        boxShadow: ['0 0 20px rgba(0, 240, 255, 0.3)', '0 0 45px rgba(0, 240, 255, 0.5)', '0 0 20px rgba(0, 240, 255, 0.3)']
                                     }}
                                     transition={{ duration: 2, repeat: Infinity }}
                                 >
@@ -2983,12 +3478,15 @@ export default function Dashboard() {
                             </h2>
                         </div>
                         <div className="flex items-center gap-4">
-                            <span className="text-xs text-gray-600">v1.0.0</span>
-                            <motion.div
-                                className="w-2 h-2 rounded-full bg-emerald-400"
-                                animate={{ opacity: [1, 0.3, 1] }}
-                                transition={{ duration: 2, repeat: Infinity }}
-                            />
+                            <span className="text-xs text-gray-600 font-mono">v1.0.0</span>
+                            <div className="flex items-center gap-2">
+                                <motion.div
+                                    className="w-2 h-2 rounded-full bg-emerald-400"
+                                    animate={{ opacity: [1, 0.3, 1] }}
+                                    transition={{ duration: 2, repeat: Infinity }}
+                                />
+                                <span className="text-[10px] text-emerald-400/70 hidden sm:inline">Online</span>
+                            </div>
                         </div>
                     </motion.div>
 
@@ -3001,7 +3499,7 @@ export default function Dashboard() {
                                 animate={{ opacity: 1, y: 0 }}
                                 exit={{ opacity: 0, y: -20 }}
                                 transition={{ duration: 0.3 }}
-                                className="max-w-6xl mx-auto h-full"
+                                className="w-full h-full"
                             >
                                 {activePanel === 'overview' && <AnalyticsPanel />}
                                 {activePanel === 'analyze' && <VehicleAnalysis />}
